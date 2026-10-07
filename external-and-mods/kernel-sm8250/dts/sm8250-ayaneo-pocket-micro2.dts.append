@@ -1,0 +1,12 @@
+
+&gpu_opp_table {
+	/delete-node/ opp-925000000;
+	/delete-node/ opp-905000000;
+	/delete-node/ opp-855000000;
+	/delete-node/ opp-800000000;
+	/delete-node/ opp-750000000;
+	/delete-node/ opp-725000000;
+	/delete-node/ opp-700000000;
+	/delete-node/ opp-670000000;
+	/delete-node/ opp-650000000;
+};
