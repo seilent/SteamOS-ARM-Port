@@ -18,5 +18,6 @@ match. The 8 Gen 3 image keeps Valve's Mesa.
 |---|---|---|
 | `0001-turnip-a740-disable-sparse-sync.patch` | ArmadaOS (originally Batocera) | A740 GPU translation fault storms from the graphics/sparse queue cross sync added in Mesa `0cc0e786` |
 | `0002-ir3-a740-disable-bindless-ubo-const-lowering.patch` | ROCKNIX SM8550, offsets for 26.2 from ArmadaOS | ir3 shader bug on the A740 |
+| `0003-freedreno-a830-chip-ids.patch` | ROCKNIX and ArmadaOS SM8750 | Adreno 830 chip ids the Odin 3 reports, missing in 26.2.3 |
 
 Build: `scripts/build-mesa.sh` (all three architectures).
