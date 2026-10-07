@@ -311,10 +311,11 @@ prepare_runtime() {
 }
 
 repack_kernel_partuuid() {
-  local src="$1" dest="$2" partuuid="$3"
+  local src="$1" dest="$2" partuuid="$3" extra="${4:-}"
   local cmdline
   # shellcheck source=external-and-mods/kernel-sm8650/soc.env
   source "${MOD}/kernel-${SOC}/soc.env"
+  KERNEL_CMDLINE_EXTRA="${KERNEL_CMDLINE_EXTRA:-}${extra:+ ${extra}}"
   # shellcheck source=external-and-mods/kernel-common/cmdline.sh
   source "${MOD}/kernel-common/cmdline.sh"
   cmdline="$(build_cmdline "${partuuid}")"
@@ -516,14 +517,13 @@ EOF
   # vfat cannot store Unix owner/mode — cp -a fails with EPERM
   sudo_run install -m0644 "${ktmp}" "${MNT}/boot/KERNEL"
   sudo_run bash -c "cd '${MNT}/boot' && md5sum KERNEL > KERNEL.md5"
-  # Optional second kernel on BOOT for testers to swap in by renaming
-  # (TEST_KERNEL_OUT; its modules must be in KERNEL_OUT too). SM8550: our own
-  # ROCKNIX build by default, so it gets the ROCKNIX cmdline; set
-  # TEST_SM8550_KERNEL=prebuilt when the spare one is the prebuilt 7.0.14.
   if [[ -n "${TEST_KERNEL_OUT:-}" ]]; then
     local ttmp
     ttmp="$(mktemp)"
-    ( export SM8550_KERNEL="${TEST_SM8550_KERNEL:-rocknix}"; repack_kernel_partuuid "${TEST_KERNEL_OUT}/boot/KERNEL" "${ttmp}" "${disk_id}-02" )
+    (
+      export SM8550_KERNEL="${TEST_SM8550_KERNEL:-rocknix}"
+      repack_kernel_partuuid "${TEST_KERNEL_OUT}/boot/KERNEL" "${ttmp}" "${disk_id}-02" "${TEST_KERNEL_CMDLINE_EXTRA:-}"
+    )
     sudo_run install -m0644 "${ttmp}" "${MNT}/boot/${TEST_KERNEL_NAME:-KERNEL-own}"
     rm -f "${ttmp}"
     log "test kernel on BOOT: ${TEST_KERNEL_NAME:-KERNEL-own}"

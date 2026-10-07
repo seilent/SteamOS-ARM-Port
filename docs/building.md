@@ -7,6 +7,7 @@ I build everything in an arm64 Linux VM (Colima on a Mac).
 - gamescope: `scripts/build-gamescope-in-rootfs.sh`, source in `external-and-mods/gamescope/`
 - the image: `make-steamos-sm8650.sh` (`SOC=sm8550` for the 8 Gen 2 one), or `./make-steamos-sm8750.sh` for the Snapdragon 8 Elite (Odin 3); `./make-steamos-sm8350.sh` turns the rootfs from `make-steamos-sm8650.sh` (or a release image) into the REDMAGIC 6 fastboot kit (kernel: `external-and-mods/kernel-sm8350/build.sh`, see [redmagic6.md](redmagic6.md))
 - `make-steamos-sm8650.sh --from-img IMG` starts from the root and home of a released card image instead of Valve's rootfs. It needs a `STEAMOS_ROOTFS` other than `$STEAMOS_WORK/rootfs`, takes gamescope from the image unless `GAMESCOPE_BUILD` has a build, and records the base image's `IMAGE.txt` as `/opt/steamos-sm8650/RELEASE-BASE.txt`
+- `TEST_KERNEL_OUT` puts a second kernel on BOOT as `TEST_KERNEL_NAME` (default `KERNEL-own`), for testers to swap in by renaming. Its modules must be in `KERNEL_OUT` too. `TEST_KERNEL_CMDLINE_EXTRA` is added to that kernel's cmdline only. On sm8550 it gets the cmdline of our own kernel; `TEST_SM8550_KERNEL=prebuilt` when the spare one is the prebuilt 7.0.14
 
 Valve's files and the Steam client aren't in this repo, the build downloads them. How the pieces fit together is in [HOW-IT-WORKS.md](HOW-IT-WORKS.md).
 
