@@ -13,10 +13,13 @@ Valve's files and the Steam client aren't in this repo, the build downloads them
 
 ## CI
 
-`.github/workflows/build-sm8250.yml` builds the sm8250 kernel on GitHub's `ubuntu-24.04-arm` runners.
+`.github/workflows/build-sm8250.yml` builds the sm8250 kernel and card image on GitHub's `ubuntu-24.04-arm` runners.
 
 - A push to `pocket-micro-2` or `pm2-draft` that touches `external-and-mods/` (other than the other SoCs' kernels), the overlays, `scripts/`, `make-steamos-sm8650.sh` or the workflow runs it with the defaults. Manual runs (`workflow_dispatch`) only work once the file is on the default branch.
 - `kernel`: fetches armada at the `ARMADA_REF` of `kernel-sm8250/soc.env` into `../armada-<ARMADA_REF>`, builds with `build-gcc15.sh` in armada's pinned Fedora image, checks the patch log, DTB, firmware and config, and uploads `kernel-sm8250` (kept 7 days) and `kernel-sm8250-log`. The step summary has the gcc version, the config `WARN` lines and the KERNEL size.
+- `image`: downloads the sm8650 card image of the `base_tag` release (part hashes pinned in the workflow per tag), checks its rootfs has gcc, cmake, ninja and Valve's Mesa, and builds the sm8250 image from it with `--from-img` on `rootfs-sm8250`. BOOT also gets `KERNEL-cpuidle-off`, the same kernel with `cpuidle.off=1` (`TEST_KERNEL_*`). Uploads `steamos-sm8250-<date>.<commit>` (7z parts and `SHA256SUMS`, kept 3 days) and `steamos-sm8250-log`.
+- The image reuses the base image's gamescope, MangoHud, NetworkManager, konkr-android, dpl.lv2 and KDE builds, so `image` fails when any of their sources or build scripts changed since the base commit. A newer base release lifts that.
+- `release`: makes a draft release `sm8250-<date>.<commit>` with the image parts, on a push to `pm2-draft` or with `draft_release`, unless `kernel-regression` failed.
 - `kernel-regression`: builds sm8650 at the base commit (`BASE_SHA`, v1.3.0) and at the head in one job, in the `kernel` job's pinned Fedora image, and fails if the config, DTBs, firmware, module list, KERNEL cmdline field, patched source or gcc version differ. Runs when `external-and-mods/kernel-common/` changed in the push, or with `regression`.
 
 Inputs (manual runs):
@@ -25,3 +28,7 @@ Inputs (manual runs):
 |---|---|---|
 | `kernel_run_id` | empty | skip the kernel build and take `kernel-sm8250` from that run; artifacts expire after 7 days |
 | `regression` | off | run `kernel-regression` |
+| `base_tag` | `v1.3.0` | release whose sm8650 image the card image starts from |
+| `base_repo` | `hashtagbasit/SteamOS-ARM-Port` | repository of that release |
+| `verbose` | on | kernel log on the panel at boot (`CMDLINE_QUIET=0`) |
+| `draft_release` | off | run `release` |

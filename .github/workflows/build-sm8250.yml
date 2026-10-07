@@ -300,3 +300,222 @@ jobs:
             ${{ runner.temp }}/*.txt
             ${{ runner.temp }}/manifest.diff
           retention-days: 7
+
+  image:
+    needs: kernel
+    if: ${{ !cancelled() && (needs.kernel.result == 'success' || needs.kernel.result == 'skipped') }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 330
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      v: ${{ steps.pack.outputs.v }}
+    steps:
+      - name: Check inputs
+        run: |
+          [[ "$BASE_TAG" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "bad base_tag" >&2; exit 1; }
+          [[ "$BASE_REPO" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "bad base_repo" >&2; exit 1; }
+          [[ "$KERNEL_RUN_ID" =~ ^[0-9]*$ ]] || { echo "bad kernel_run_id" >&2; exit 1; }
+          echo "JOB_START=$(date +%s)" >>"$GITHUB_ENV"
+      - uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e
+        with:
+          remove-codeql: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Base commit
+        run: git cat-file -e "${BASE_SHA}^{commit}"
+      - name: Host tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends p7zip-full dosfstools uuid-runtime bubblewrap rsync libcap2-bin fdisk python3
+          gh --version
+          sudo losetup -f
+          sudo bwrap --bind / / true
+      - name: Reuse guard
+        run: |
+          paths=(
+            external-and-mods/gamescope
+            scripts/build-gamescope-in-rootfs.sh
+            external-and-mods/MangoHud
+            external-and-mods/MangoHud-qualcomm
+            scripts/build-mangohud-in-rootfs.sh
+            external-and-mods/NetworkManager
+            scripts/build-networkmanager-in-rootfs.sh
+            external-and-mods/konkr-android
+            scripts/build-dpl-lv2-in-rootfs.sh
+            scripts/build-kscreen-6.2.5.sh
+            scripts/build-kf6-nm-qt-6.14.sh
+            scripts/build-plasma-nm-6.2.5.sh
+            scripts/build-plasma-keyboard.sh
+            scripts/build-kde-gear-26.04.2.sh
+            scripts/build-ark-26.04.2.sh
+          )
+          changed="$(git diff --name-only "$BASE_SHA" HEAD -- "${paths[@]}")"
+          if [ -n "$changed" ]; then
+            echo "changed since ${BASE_SHA}, the base image build is stale:" >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+      - if: ${{ needs.kernel.result == 'success' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: kernel-sm8250
+          path: ${{ runner.temp }}/kernel
+      - if: ${{ needs.kernel.result == 'skipped' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: kernel-sm8250
+          path: ${{ runner.temp }}/kernel
+          run-id: ${{ env.KERNEL_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Kernel
+        run: |
+          mkdir -p "$W/kernel-sm8250/output"
+          sudo tar -C "$W/kernel-sm8250/output" -xf "$RUNNER_TEMP/kernel/kernel-sm8250.tar"
+          test -s "$W/kernel-sm8250/output/current/boot/KERNEL"
+          echo "KREL=$(readlink "$W/kernel-sm8250/output/current")" >>"$GITHUB_ENV"
+      - name: Base image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$BASE_TAG" in
+            v1.3.0)
+              sums="ea22c1b48892194ad30fd10f9c6c76fc55705f75d76dc22e470407b1ad3aaebd  steamos-arm-port-sm8650-v1.3.0.7z.001
+          b640722117b49bca6498ee2e2be120b007b2ff8f769c0a268e58378343c42042  steamos-arm-port-sm8650-v1.3.0.7z.002
+          376a07c7889f25dce2f65d99d4c8ff5707e5d16e0cf85c13964bd380884f7fe2  steamos-arm-port-sm8650-v1.3.0.7z.003" ;;
+            *) echo "no pinned part hashes for ${BASE_TAG}" >&2; exit 1 ;;
+          esac
+          b=$W/base
+          mkdir -p "$b"
+          gh release download "$BASE_TAG" -R "$BASE_REPO" -p "steamos-arm-port-sm8650-${BASE_TAG}.7z.*" -D "$b"
+          (cd "$b" && sha256sum -c <<<"$sums") | tee "$RUNNER_TEMP/base-sums.txt"
+          test "$(grep -c ': OK$' "$RUNNER_TEMP/base-sums.txt")" -eq 3
+          test "$(find "$b" -maxdepth 1 -name '*.7z.*' | wc -l)" -eq 3
+          n=$(7z l -slt "$b/steamos-arm-port-sm8650-${BASE_TAG}.7z.001" | grep -c '^Path = .*\.img$' || true)
+          test "$n" -eq 1
+          7z x -bd -o"$b" "$b/steamos-arm-port-sm8650-${BASE_TAG}.7z.001" >/dev/null
+          rm -f "$b"/*.7z.*
+          img=$(find "$b" -maxdepth 1 -name '*.img')
+          test -f "$img"
+          echo "BASE_IMG=$img" >>"$GITHUB_ENV"
+      - name: Base image preflight
+        run: |
+          m=$W/basemnt
+          dev=$(sudo losetup -r -f --show -P "$BASE_IMG")
+          trap 'sudo umount "$m" 2>/dev/null || true; sudo losetup -d "$dev"' EXIT
+          for _ in $(seq 1 50); do [ -b "${dev}p2" ] && break; sleep 0.1; done
+          sudo mkdir -p "$m"
+          sudo mount -o ro "${dev}p2" "$m"
+          grep -qx 'soc=sm8650' "$m/opt/steamos-sm8650/IMAGE.txt"
+          for t in gcc cmake ninja; do test -x "$m/usr/bin/$t" || { echo "base rootfs has no $t" >&2; exit 1; }; done
+          if compgen -G "$m/opt/stock-steamos/usr/lib/libgallium-*.so" >/dev/null; then
+            echo "base rootfs has Valve Mesa moved to /opt/stock-steamos" >&2; exit 1
+          fi
+          mesa=$(grep -a -o -h -m1 'Mesa [0-9.]*' "$m"/usr/lib/libgallium-*.so | head -n 1)
+          echo "base Mesa: $mesa" >>"$GITHUB_STEP_SUMMARY"
+          [[ "$mesa" == "Mesa 26.3"* ]] || { echo "base Mesa is $mesa, not Valve's 26.3" >&2; exit 1; }
+      - name: Build image
+        run: |
+          quiet=1
+          [ "$VERBOSE" = 1 ] && quiet=0
+          sudo -E env STEAMOS_WORK="$W" STEAMOS_ROOTFS="$W/rootfs-sm8250" SOC=sm8250 \
+            KERNEL_OUT="$W/kernel-sm8250/output/current" CMDLINE_QUIET="$quiet" \
+            TEST_KERNEL_OUT="$W/kernel-sm8250/output/current" TEST_KERNEL_NAME=KERNEL-cpuidle-off \
+            TEST_KERNEL_CMDLINE_EXTRA=cpuidle.off=1 BOX64_SRC="$W/box64" \
+            ./make-steamos-sm8650.sh --from-img "$BASE_IMG" --img "$W/steamos-sm8250.img" 2>&1 | tee "$RUNNER_TEMP/img8250.log"
+          test "${PIPESTATUS[0]}" -eq 0
+          sudo rm -f "$BASE_IMG"
+      - name: Check build log and rootfs
+        run: |
+          L=$RUNNER_TEMP/img8250.log
+          R=$W/rootfs-sm8250
+          mapfile -t c < <(grep 'KERNEL cmdline:' "$L")
+          test "${#c[@]}" -eq 2
+          [[ "${c[1]}" == *" cpuidle.off=1" ]]
+          grep -qF '==> cmake Box64 (SD865)' "$L"
+          grep -qx 'SD865:BOOL=ON' /tmp/box64-build-frame/CMakeCache.txt
+          test "$(sudo cat "$R/usr/local/share/box64-target")" = SD865
+          ref=$(grep -oE '[0-9a-f]{40}' <(grep '^REF=' scripts/build-box64-in-rootfs.sh))
+          test -n "$ref"
+          test "$(sudo git -c safe.directory='*' -C "$W/box64" rev-parse HEAD)" = "$ref"
+          sudo ls "$R/usr/lib/binfmt.d/box64.conf" "$R/etc/binfmt.d/box64.conf"
+          test "$(sudo ls "$R/usr/lib/modules")" = "$KREL"
+          source external-and-mods/kernel-sm8250/soc.env
+          n=0
+          for ent in $BUILTIN_FW; do
+            sha=${ent##*:}
+            dst=${ent#*:}
+            dst=${dst%:*}
+            echo "$sha  $R/usr/lib/firmware/$dst" | sudo sha256sum -c --quiet
+            n=$((n + 1))
+          done
+          test "$n" -eq 9
+          STEAMOS_WORK=$W bash scripts/stage-rocknix-abl.sh "$RUNNER_TEMP/abl-sm8650" sm8650
+      - name: Check image
+        run: |
+          m=$W/newmnt
+          dev=$(sudo losetup -r -f --show -P "$W/steamos-sm8250.img")
+          trap 'sudo umount "$m/boot" "$m/root" 2>/dev/null || true; sudo losetup -d "$dev"' EXIT
+          for _ in $(seq 1 50); do [ -b "${dev}p2" ] && break; sleep 0.1; done
+          sudo mkdir -p "$m/boot" "$m/root"
+          sudo mount -o ro "${dev}p1" "$m/boot"
+          sudo mount -o ro "${dev}p2" "$m/root"
+          for f in KERNEL KERNEL.md5 KERNEL-cpuidle-off rocknix_abl/SM8250/abl_signed-SM8250.elf \
+                   rocknix_abl/SM8250/abl_signed-SM8250.elf.sha256 rocknix_abl/SM8250/flash_abl.sh; do
+            sudo test -s "$m/boot/$f" || { echo "BOOT has no $f" >&2; exit 1; }
+          done
+          r=$m/root
+          sudo grep -qx 'soc=sm8250' "$r/opt/steamos-sm8650/IMAGE.txt"
+          sudo grep -qx 'soc=sm8650' "$r/opt/steamos-sm8650/RELEASE-BASE.txt"
+          test "$(sudo ls "$r/usr/lib/modules")" = "$KREL"
+          for f in qcom/a650_sqe.fw qcom/sm8250/adsp.mbn ath11k/QCA6390/hw2.0/amss.bin; do
+            sudo test -s "$r/usr/lib/firmware/$f" || { echo "root has no firmware $f" >&2; exit 1; }
+          done
+      - id: pack
+        name: Pack
+        run: |
+          v=$(date -u +%Y%m%d).$(git rev-parse --short HEAD)
+          mkdir -p "$W/out"
+          7z a -bd -mx=5 -v1992294400b "$W/out/steamos-arm-port-sm8250-$v.7z" "$W/steamos-sm8250.img" >/dev/null
+          sudo rm -f "$W/steamos-sm8250.img"
+          (cd "$W/out" && sha256sum steamos-arm-port-sm8250-"$v".7z.* >SHA256SUMS)
+          cat "$W/out/SHA256SUMS" >>"$GITHUB_STEP_SUMMARY"
+          echo "v=$v" >>"$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: steamos-sm8250-${{ steps.pack.outputs.v }}
+          path: ${{ env.W }}/out/*
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: steamos-sm8250-log
+          path: ${{ runner.temp }}/img8250.log
+          retention-days: 3
+      - if: ${{ !cancelled() }}
+        name: Disk and time
+        run: |
+          { echo '### Disk'; echo '```'; df -h /; echo '```'; echo "Job time: $(( ($(date +%s) - JOB_START) / 60 )) min"; } >>"$GITHUB_STEP_SUMMARY"
+
+  release:
+    needs: [image, kernel-regression]
+    if: ${{ !cancelled() && needs.image.result == 'success' && (needs.kernel-regression.result == 'success' || needs.kernel-regression.result == 'skipped') && (inputs.draft_release || github.ref == 'refs/heads/pm2-draft') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: steamos-sm8250-${{ needs.image.outputs.v }}
+          path: ${{ env.W }}/out
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.image.outputs.v }}
+        run: gh release create "sm8250-$V" --draft --target "$GITHUB_SHA" -R "$GITHUB_REPOSITORY" --title "Pocket MICRO 2 test $V" "$W"/out/*
