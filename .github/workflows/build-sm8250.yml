@@ -271,7 +271,8 @@ jobs:
             echo '## cmdline'
             dd if="$o/boot/KERNEL" bs=1 skip=64 count=512 status=none | sha256sum
             echo '## source'
-            (cd "$W/reg/linux-${KVER}" && find . -type f \( -name '*.[chS]' -o -name '*.dts*' -o -name 'Kconfig*' -o -name Makefile \) -not -path '*/include/generated/*' -not -name '.*' -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum)
+            sudo make -s -C "$W/reg/linux-${KVER}" ARCH=arm64 distclean
+            (cd "$W/reg/linux-${KVER}" && find . -type f \( -name '*.[chS]' -o -name '*.dts*' -o -name 'Kconfig*' -o -name Makefile \) -not -name '.*' -print0 | LC_ALL=C sort -z | xargs -0 sha256sum)
           }
           source external-and-mods/kernel-sm8650/soc.env
           for side in base head; do
@@ -287,7 +288,7 @@ jobs:
           done
           diff "$RUNNER_TEMP/gcc-base.txt" "$RUNNER_TEMP/gcc-head.txt"
           if ! diff -u "$RUNNER_TEMP/manifest-base.txt" "$RUNNER_TEMP/manifest-head.txt" >"$RUNNER_TEMP/manifest.diff"; then
-            { echo '### sm8650 differs between base and head'; echo '```'; head -n 200 "$RUNNER_TEMP/manifest.diff"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+            { echo '### sm8650 differs between base and head'; echo "changed source hash lines: $(grep -c '^[-+][0-9a-f]\{64\}' "$RUNNER_TEMP/manifest.diff" || true)"; echo '```'; head -n 200 "$RUNNER_TEMP/manifest.diff"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
             exit 1
           fi
           echo "sm8650 identical at ${BASE_SHA} and ${GITHUB_SHA}" >>"$GITHUB_STEP_SUMMARY"
