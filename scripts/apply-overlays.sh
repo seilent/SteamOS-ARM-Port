@@ -636,6 +636,8 @@ if [[ -f "$KAPAY/common/system/product/priv-app/Phonesky/Phonesky.apk" ]]; then
   find "$R/usr/share/konkr-android" -type f -exec chmod 0644 {} +
   # Valve's prebaked dalvik-cache files are 0755; keep ours the same.
   find "$R/usr/share/konkr-android" -path '*/data/dalvik-cache/*' -type f -exec chmod 0755 {} +
+elif [[ -f "$R/usr/share/konkr-android/common/system/product/priv-app/Phonesky/Phonesky.apk" ]]; then
+  log "konkr-android: no payload in $KAPAY, keeping the rootfs copy"
 else
   log "WARN: no konkr-android payload (external-and-mods/konkr-android/build-payload.sh); Android apps will lack the Play Store and fixes"
 fi
@@ -839,41 +841,36 @@ else
   chroot "$R" systemd-hwdb update --usr
 fi
 
-# ---------------------------------------------------------------------------
-# MangoHud: keep SteamOS stock binaries. Host Ubuntu mangoapp needs GLIBC_2.43
-# (SteamOS is 2.39) and crash-loops gamescopereaper / the session.
-# Build from external-and-mods/MangoHud against SteamOS glibc before replacing.
-# ---------------------------------------------------------------------------
-log "== MangoHud (stock SteamOS — host Ubuntu mango needs GLIBC_2.43)"
+command -v strings >/dev/null || die "strings required (binutils)"
+needs_glibc243() {
+  strings "$1" 2>/dev/null | grep 'GLIBC_2\.43' >/dev/null
+}
+log "== MangoHud (stock SteamOS over copies that need GLIBC_2.43)"
 for b in mangohud mangoapp mangohudctl; do
-  if [[ -f "$STOCK/usr/bin/$b" ]]; then
+  if [[ -f "$STOCK/usr/bin/$b" ]] && { [[ ! -f "$R/usr/bin/$b" ]] || needs_glibc243 "$R/usr/bin/$b"; }; then
     install_file "$STOCK/usr/bin/$b" "$R/usr/bin/$b" 0755
   fi
 done
 for lib in libMangoHud.so libMangoHud_opengl.so libMangoHud_shim.so libMangoHud-next.so; do
-  if [[ -f "$STOCK/usr/lib/$lib" ]]; then
+  if [[ -f "$STOCK/usr/lib/$lib" ]] && { [[ ! -f "$R/usr/lib/$lib" ]] || needs_glibc243 "$R/usr/lib/$lib"; }; then
     install_file "$STOCK/usr/lib/$lib" "$R/usr/lib/$lib" 0755
   fi
 done
-# Wi-Fi back in under a second after sleep: the Frame's NetworkManager with
-# Valve's resume scan patch (scripts/build-networkmanager-in-rootfs.sh).
 NMBUILD="${NETWORKMANAGER_BUILD:-${WORKDIR}/networkmanager-build}"
-NMVER="$(cat "$NMBUILD/VERSION" 2>/dev/null)"
+NMVER="$(cat "$NMBUILD/VERSION" 2>/dev/null || true)"
 if [[ -x "$NMBUILD/NetworkManager" && -d "$R/usr/lib/NetworkManager/$NMVER" ]]; then
   install_file "$NMBUILD/NetworkManager" "$R/usr/bin/NetworkManager" 0755
   install_file "$NMBUILD/libnm-device-plugin-wifi.so" "$R/usr/lib/NetworkManager/$NMVER/libnm-device-plugin-wifi.so" 0755
   log "NetworkManager: ours ($NMVER, fast resume)"
 else
-  log "WARN: no NetworkManager build for this rootfs, Wi-Fi takes ~9 s to come back after sleep"
+  log "WARN: no NetworkManager build, /usr/bin/NetworkManager is left as it is"
 fi
-# Steam's performance overlay: our mangoapp (scripts/build-mangohud-in-rootfs.sh)
-# reads GPU load, clock and VRAM on Adreno; stock shows the GPU at 0 %.
 MHBUILD="${MANGOHUD_BUILD:-${WORKDIR}/mangohud-build}"
 if [[ -x "$MHBUILD/mangoapp" ]]; then
   install_file "$MHBUILD/mangoapp" "$R/usr/bin/mangoapp" 0755
   log "mangoapp: ours ($MHBUILD)"
 else
-  log "WARN: no $MHBUILD/mangoapp, Steam's overlay keeps stock (GPU shows 0 %)"
+  log "WARN: no $MHBUILD/mangoapp, /usr/bin/mangoapp is left as it is"
 fi
 
 # Hardware video decode for VA-API apps (scripts/install-v4l2-vaapi.sh).
