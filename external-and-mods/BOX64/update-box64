@@ -7,11 +7,10 @@ WORK_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/update-box64"
 BOX64_SRC="${WORK_DIR}/box64"
 BUILD_DIR="${BOX64_SRC}/build"
 REPO_URL="https://github.com/ptitSeb/box64"
-CMAKE_FLAGS=(-DSD8G2=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo)
+CMAKE_FLAGS=(-DSD865=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo)
 MANIFEST_DST="/usr/local/share/box64/install_manifest.txt"
 need_gcc_major=12
 
-# Fallback list (from a known SD8G2 cmake install_manifest.txt) if no saved manifest.
 DEFAULT_MANIFEST=(
   /usr/local/bin/box64
   /usr/local/bin/box64-configurator
@@ -82,7 +81,7 @@ do_install() {
   local gcc_major
   gcc_major="$(gcc -dumpversion | cut -d. -f1)"
   if (( gcc_major < need_gcc_major )); then
-    die "box64 SD8G2 requires GCC ${need_gcc_major}+ (found GCC ${gcc_major})."
+    die "box64 SD865 requires GCC ${need_gcc_major}+ (found GCC ${gcc_major})."
   fi
 
   mkdir -p "$WORK_DIR"
@@ -96,7 +95,7 @@ do_install() {
   log "Cloning box64..."
   git clone --recursive "$REPO_URL" "$BOX64_SRC"
 
-  log "Building box64 for SD8G2..."
+  log "Building box64 for SD865..."
   mkdir -p "$BUILD_DIR"
   cmake -S "$BOX64_SRC" -B "$BUILD_DIR" "${CMAKE_FLAGS[@]}"
   cmake --build "$BUILD_DIR" -j"$(nproc)"
@@ -201,7 +200,7 @@ usage() {
 Usage: update-box64 [command]
 
 Commands:
-  install | update   Build from upstream and install/update box64 (SD8G2)
+  install | update   Build from upstream and install/update box64 (SD865)
   uninstall          Remove box64 completely (for switching to FEX, etc.)
   (no argument)      Interactive menu
 

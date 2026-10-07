@@ -151,6 +151,8 @@ Output: `/work/steamos-sm8650.img`.
   only, so the image adds an unmodified aarch64 build of lsfg-vk 2.0 as its own
   layer (`VK_LAYER_LSFGVK_frame_generation_arm64`) for ARM64 games. The plugin's
   install step and config check work on ARM because its x86 CLI runs through Box64.
+- Box64 is one armv8.2 build (box64's `SD865` target) for every chip, pinned
+  to the box64 commit in `BOX64_REF` (`scripts/build-box64-in-rootfs.sh`).
 - SSH is on by default (password login for `steamos`, root off).
 - Desktop mode: the Steam keyboard works in Wayland apps, Discover gets the
   Flathub catalog, and KWin/plasmashell get the big-core boost too.

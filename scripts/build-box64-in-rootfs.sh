@@ -10,15 +10,25 @@ ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 R="${1:-${ROOT}/rootfs}"
 R="$(cd "$R" && pwd)"
 SRC="${BOX64_SRC:-${ROOT}/external-and-mods/BOX64/box64}"
+REF="${BOX64_REF:-2f47bdff3ae9b3b7fb462fea0579cd3e87551e75}"
 BUILD="${BOX64_BUILD_FRAME:-/tmp/box64-build-frame}"
 
 [[ -d "$R/usr" ]] || { echo "ERROR: bad rootfs $R" >&2; exit 1; }
-[[ -f "$SRC/CMakeLists.txt" ]] || { echo "ERROR: missing box64 source $SRC" >&2; exit 1; }
 [[ -x "$R/usr/bin/cmake" && -x "$R/usr/bin/gcc" ]] || {
   echo "ERROR: rootfs needs gcc+cmake (build against Frame, not the host)" >&2
   exit 1
 }
 command -v bwrap >/dev/null 2>&1 || { echo "ERROR: bwrap required" >&2; exit 1; }
+if [[ ! -d "$SRC/.git" ]]; then
+  [[ -e "$SRC" ]] && { echo "ERROR: $SRC is not a box64 git checkout" >&2; exit 1; }
+  echo "==> clone ptitSeb/box64 into $SRC"
+  git clone https://github.com/ptitSeb/box64 "$SRC"
+fi
+g() { git -c safe.directory="$SRC" -C "$SRC" "$@"; }
+g cat-file -e "${REF}^{commit}" 2>/dev/null || g fetch -q origin "$REF"
+g checkout -q "$REF"
+g submodule update -q --init --recursive
+[[ "$(g rev-parse HEAD)" == "$REF" ]] || { echo "ERROR: box64 source is not at $REF" >&2; exit 1; }
 
 run() {
   bwrap --bind "$R" / \
@@ -29,10 +39,8 @@ run() {
     "$@"
 }
 
-# SD8G2 builds for armv9-a. The 8 Elite's Oryon cores are armv8.x, so its
-# image uses SDORYON1 (armv8.6-a), which runs on every chip we support.
-TARGET="${BOX64_TARGET:-SD8G2}"
-case "$TARGET" in SD8G2|SDORYON1) ;; *) echo "ERROR: BOX64_TARGET must be SD8G2 or SDORYON1" >&2; exit 1 ;; esac
+TARGET="${BOX64_TARGET:-SD865}"
+case "$TARGET" in SD865) ;; *) echo "ERROR: BOX64_TARGET must be SD865" >&2; exit 1 ;; esac
 echo "==> cmake Box64 ($TARGET) against $R"
 rm -rf "$BUILD"
 mkdir -p "$BUILD"

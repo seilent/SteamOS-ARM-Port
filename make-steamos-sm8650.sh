@@ -154,20 +154,25 @@ apply_mods() {
 }
 
 build_box64() {
+  local mark="${R}/usr/local/share/box64-target"
   if [[ -x "${R}/usr/local/bin/box64" ]] \
       && ! strings "${R}/usr/local/bin/box64" | grep -q 'GLIBC_2\.43'; then
-    log "Box64 already in rootfs (Frame glibc) — skip rebuild"
-    return 0
+    if [[ "$(cat "$mark" 2>/dev/null)" == SD865 ]]; then
+      log "Box64 (SD865) already in rootfs, skip rebuild"
+      return 0
+    fi
+    if [[ "$SKIP_BOX64" -eq 1 ]]; then
+      log "Box64 in rootfs is not the SD865 build, kept (--skip-box64)"
+      return 0
+    fi
   fi
   if [[ "$SKIP_BOX64" -eq 1 ]]; then
     die "Box64 missing or needs GLIBC_2.43, and --skip-box64 is set"
   fi
-  if [[ ! -d "${BOX64_SRC}/.git" && ! -f "${BOX64_SRC}/CMakeLists.txt" ]]; then
-    log "Cloning ptitSeb/box64"
-    git clone --recursive --depth 1 https://github.com/ptitSeb/box64 "${BOX64_SRC}"
-  fi
-  log "Building Box64 inside Frame rootfs (glibc 2.39, SD8G2)"
-  "${SCRIPTS}/build-box64-in-rootfs.sh" "${R}"
+  log "Building Box64 inside Frame rootfs (glibc 2.39, SD865)"
+  BOX64_TARGET=SD865 BOX64_SRC="${BOX64_SRC}" "${SCRIPTS}/build-box64-in-rootfs.sh" "${R}"
+  mkdir -p "$(dirname "$mark")"
+  echo SD865 >"$mark"
 }
 
 install_box64_rootfs() {

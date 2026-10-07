@@ -137,19 +137,16 @@ ensure_official_rootfs() {
   [[ -x "${R}/usr/bin/bash" ]] || die "unpacked rootfs has no /usr/bin/bash"
 }
 
-# Box64 runs Decky's x86-64 PluginLoader. Built inside the Frame rootfs for
-# its glibc, with Oryon flags (SDORYON1, armv8.6-a): the 8 Gen 2 build uses
-# armv9-a, which the 8 Elite's cores don't implement.
 ensure_box64() {
   local mark="${R}/usr/local/share/box64-target"
-  if [[ -x "${R}/usr/local/bin/box64" && "$(cat "$mark" 2>/dev/null)" == SDORYON1 ]]; then
-    log "Box64 (SDORYON1) already in rootfs"
+  if [[ -x "${R}/usr/local/bin/box64" && "$(cat "$mark" 2>/dev/null)" == SD865 ]]; then
+    log "Box64 (SD865) already in rootfs"
     return 0
   fi
-  log "Building Box64 (SDORYON1) inside the Frame rootfs"
-  sudo_run env BOX64_TARGET=SDORYON1 BOX64_SRC="${BOX64_SRC:-${WORKDIR}/box64}" \
+  log "Building Box64 (SD865) inside the Frame rootfs"
+  sudo_run env BOX64_TARGET=SD865 BOX64_SRC="${BOX64_SRC:-${WORKDIR}/box64}" \
     "${SCRIPTS}/build-box64-in-rootfs.sh" "${R}"
-  echo SDORYON1 | sudo_run tee "$mark" >/dev/null
+  echo SD865 | sudo_run tee "$mark" >/dev/null
 }
 
 apply_mods() {
