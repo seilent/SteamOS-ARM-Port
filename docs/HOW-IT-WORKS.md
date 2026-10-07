@@ -9,8 +9,10 @@ AYANEO Pocket S2 shares the ROCKNIX dtsi and gets a DTB too (untested).
 
 - The SteamOS ARM userspace this project repackages is Valve's
   **Steam Frame** image, and the Steam Frame *is* SM8650 / Adreno 750. Valve's
-  own Turnip, zink and GPU firmware target this exact GPU, so this build keeps
-  the Frame Mesa untouched.
+  own Turnip, zink and GPU firmware target this exact GPU, so the sm8650 build
+  keeps Valve's Mesa unless `MESA_STACK` is set. The v1.3.0 sm8650 release
+  image ships our Mesa 26.2.3 with GL through zink, with Valve's Mesa in
+  `/opt/stock-steamos`.
 - Everything device-specific comes from ROCKNIX, which already boots Linux on
   this handheld: kernel patches, DTS, kernel config, AYANEO-signed
   ADSP/CDSP/GPU-zap firmware, audio topology + UCM, ChipOne touch driver.
@@ -74,11 +76,12 @@ konkr-game compat %command%    # strict TSO / split locks for crashing games
   panel to match. Game Mode starts at 144 Hz.
 - **Performance Overlay works.** On SM8550 it was disabled: mangoapp is GL,
   GL on the Frame is zink-on-Turnip, and swapping only `libvulkan_freedreno.so`
-  mismatched the pair, so mangoapp crashed. Here mangoapp is pinned to a saved
-  copy of the Frame's Turnip (`/usr/lib/steamos-sm8650/bin/mangoapp`), so the
-  overlay keeps working even if you install another Turnip with
-  MESA-Easy-Manager. `gamescope-onready` also now passes Steam the full Valve
-  environment list (`STEAM_USE_MANGOAPP`, `MANGOHUD_CONFIGFILE`,
+  mismatched the pair, so mangoapp crashed. With Valve's Mesa in `/usr/lib`,
+  mangoapp is pinned to a saved copy of the Frame's Turnip
+  (`/usr/lib/steamos-sm8650/bin/mangoapp`), so the overlay keeps working even
+  if you install another Turnip with MESA-Easy-Manager. With our Mesa it runs
+  on the system Turnip, no pin. `gamescope-onready` also now passes Steam the
+  full Valve environment list (`STEAM_USE_MANGOAPP`, `MANGOHUD_CONFIGFILE`,
   `STEAM_DISPLAY_REFRESH_LIMITS`, …), which the SM8550 session dropped.
 
 ### Lighting
@@ -101,7 +104,7 @@ which would fight `konkrd` over the fan and drive AYN-only LEDs.
 | Kernel | 7.0.14 + Armbian sm8550 | **7.1.2** (ROCKNIX 20260801 SM8650 recipe) + Pocket FIT patches (`external-and-mods/kernel-sm8650/`) |
 | DTB selection | 14-slot index chain | ROCKNIX ABL ≥ 1.1.8 matches the DTB `model` string |
 | Root | initramfs + `root=UUID=` | tiny busybox initramfs (writes `bootlog.txt` to the FAT partition), `root=PARTUUID=` patched at image pack |
-| GPU userspace | patched A740 Turnip | Frame's stock Turnip/zink (A750) |
+| GPU userspace | patched A740 Turnip | Valve's Turnip/zink (A750), or our Mesa 26.2.3 with `MESA_STACK` (v1.3.0 release image) |
 | Controller | `rsinput` serial MCU | USB XInput pad → InputPlumber `deck-uhid` (+ optional MCU link) |
 | Audio | `AYN-Odin2` | `SM8650-APS2`: WSA884x speakers + WCD939x, ROCKNIX UCM |
 | UFS installer | SM8550 layouts | rewritten for the Pocket FIT: keeps Android, backs up the partition table |
@@ -167,6 +170,7 @@ Output: `/work/steamos-sm8650.img`.
 - AYANEO Pocket S2: has a DTB, never booted.
 - AYANEO Pocket MICRO 2: runs ArmadaOS's Pocket MICRO 2 kernel (Linux 7.2.6, arm64
   defconfig, ArmadaOS config and patch series, its device tree), GPU capped at
-  the 587 MHz stock max.
+  the 587 MHz stock max. Mesa 26.2.3 with GL through zink, from its v1.3.0 base
+  image.
 - Which USB `phys_path` the internal pad uses (an external Xbox 360 pad with
   the same IDs gets merged into the same virtual Deck controller).

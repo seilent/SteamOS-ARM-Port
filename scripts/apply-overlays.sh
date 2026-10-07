@@ -915,6 +915,22 @@ cat >"$R/usr/share/steamos-sm8650/frame-turnip_icd.aarch64.json" <<'JSON'
 JSON
 chmod 0755 "$R/usr/lib/steamos-sm8650/bin/mangoapp" 2>/dev/null || true
 
+GUEST="$R/usr/share/guestos/fex-mesa"
+ANDROID_VENDOR="usr/share/guestos/android/vendor/lib64"
+our_mesa_session() {
+  rm -rf "$R/usr/lib/steamos-sm8650/frame-turnip" \
+    "$R/usr/share/steamos-sm8650/frame-turnip_icd.aarch64.json"
+  mkdir -p "$R/usr/lib/environment.d"
+  printf '# Our Mesa: GL goes through zink on Turnip, like the Frame.\nMESA_LOADER_DRIVER_OVERRIDE=zink\n' \
+    >"$R/usr/lib/environment.d/60-sm8550-zink.conf"
+  chmod 0644 "$R/usr/lib/environment.d/60-sm8550-zink.conf"
+  for f in "$R/usr/lib/libgallium-"*.so "$GUEST/usr/lib/libgallium-"*.so \
+           "$GUEST/usr/lib32/libgallium-"*.so "$R/$ANDROID_VENDOR/libgallium_dri.so"; do
+    [[ -e "$f" ]] || continue
+    log "   ${f#$R}: $(grep -a -o -m1 'Mesa [0-9][0-9.]*' "$f" || echo '?')"
+  done
+}
+
 # 8 Gen 2 (Adreno 740): our own Mesa 26.2.3 stack with the A740 fixes
 # (scripts/build-mesa.sh, external-and-mods/mesa/README.md) replaces Valve's
 # whole Mesa, native and in the FEX guest tree. Valve's files go by their
@@ -925,7 +941,6 @@ if [[ -n "${MESA_STACK:-}" ]]; then
     ls "$MESA_STACK/$a/usr/share/vulkan/icd.d/"freedreno_icd.*.json >/dev/null 2>&1 \
       || die "MESA_STACK has no $a build"
   done
-  ANDROID_VENDOR="usr/share/guestos/android/vendor/lib64"
   [[ -f "$MESA_STACK/android/$ANDROID_VENDOR/hw/vulkan.freedreno.so" ]] \
     || die "MESA_STACK has no android build (Lepton)"
   PDB="$R/usr/lib/holo/pacmandb/local"
@@ -941,7 +956,6 @@ if [[ -n "${MESA_STACK:-}" ]]; then
           rm -f "$R/$f"
         done
   done
-  GUEST="$R/usr/share/guestos/fex-mesa"
   cp -a "$MESA_STACK/aarch64/usr/lib/." "$R/usr/lib/"
   cp -a "$MESA_STACK/aarch64/usr/share/." "$R/usr/share/"
   cp -a "$MESA_STACK/x86_64/usr/lib/." "$GUEST/usr/lib/"
@@ -953,27 +967,16 @@ if [[ -n "${MESA_STACK:-}" ]]; then
   cp -a "$MESA_STACK/android/$ANDROID_VENDOR/." "$R/$ANDROID_VENDOR/"
   chown -R root:root "$R/$ANDROID_VENDOR"
   chown -R root:root "$R/usr/lib/dri" "$GUEST/usr/lib/dri" "$GUEST/usr/lib32/dri"
-  # mangoapp runs on the system Turnip (it matches our zink), no pin.
-  rm -rf "$R/usr/lib/steamos-sm8650/frame-turnip" \
-    "$R/usr/share/steamos-sm8650/frame-turnip_icd.aarch64.json"
-  # Our 26.2.3 has no msm DRI driver and, unlike Valve's 26.3-devel, doesn't
-  # fall back to zink on its own: Xwayland got "msm: driver missing", no GBM,
-  # and Steam crash-looped behind a black screen (Odin 2 tester, beta 3).
-  # environment.d reaches the whole user session (gamescope, Xwayland, Steam,
-  # Plasma) and games, including FEX's x86 Mesa.
-  mkdir -p "$R/usr/lib/environment.d"
-  printf '# SM8550 image (our Mesa): GL goes through zink on Turnip, like the Frame.\nMESA_LOADER_DRIVER_OVERRIDE=zink\n' \
-    >"$R/usr/lib/environment.d/60-sm8550-zink.conf"
-  chmod 0644 "$R/usr/lib/environment.d/60-sm8550-zink.conf"
-  for f in "$R/usr/lib/libgallium-"*.so "$GUEST/usr/lib/libgallium-"*.so \
-           "$GUEST/usr/lib32/libgallium-"*.so "$R/$ANDROID_VENDOR/libgallium_dri.so"; do
-    log "   ${f#$R}: $(grep -a -o -m1 'Mesa [0-9][0-9.]*' "$f" || echo '?')"
-  done
+  our_mesa_session
 elif [[ -n "$MESA_SO" ]]; then
-  rm -f "$R/usr/lib/environment.d/60-sm8550-zink.conf"
+  compgen -G "$STOCK/usr/lib/libgallium-*.so" >/dev/null \
+    || rm -f "$R/usr/lib/environment.d/60-sm8550-zink.conf"
   log "== Mesa override $MESA_SO"
   backup "$R/usr/lib/libvulkan_freedreno.so" "$STOCK/usr/lib/libvulkan_freedreno.so"
   install_file "$MESA_SO" "$R/usr/lib/libvulkan_freedreno.so" 0755
+elif compgen -G "$STOCK/usr/lib/libgallium-*.so" >/dev/null; then
+  log "== Mesa: keeping the rootfs stack, Valve's in ${STOCK#$R}"
+  our_mesa_session
 else
   rm -f "$R/usr/lib/environment.d/60-sm8550-zink.conf"
   log "== Mesa: keeping Frame Turnip (Adreno 750 = this SoC)"
