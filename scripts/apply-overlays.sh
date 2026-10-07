@@ -16,6 +16,7 @@ KOUT="${KOUTS[0]}"
 KREL="$(basename "$KOUT")"
 SM8650_OVL="${ROOT}/sm8650-overlay"
 SM8550_OVL="${ROOT}/sm8550-overlay"
+SM8250_OVL="${ROOT}/sm8250-overlay"
 STOCK="${R}/opt/stock-steamos"
 GSBUILD="${GAMESCOPE_BUILD:-${WORKDIR}/gamescope-build}"
 # Optional Turnip override. Empty = keep the Frame's own (built for A750).
@@ -744,12 +745,6 @@ install -D -m0644 "${ROOT}/steamos-overlay/usr/lib/systemd/system/steamos-arm-lo
 ln -sfn ../steamos-arm-lower-deck.service \
   "$R/usr/lib/systemd/system/multi-user.target.wants/steamos-arm-lower-deck.service"
 
-# ---------------------------------------------------------------------------
-# SM8550 device overlay: AYANEO Pocket / Retroid Pocket pads (deck-uhid),
-# Thor + AYANEO Pocket UCM, AYANEO volume keys. Applied on every image (it
-# matches by DT model), so one rootfs serves both SoCs; only the kernel,
-# modules and firmware differ per SoC.
-# ---------------------------------------------------------------------------
 log "== SM8550 overlay (AYN / AYANEO / Retroid)"
 cp -r --no-preserve=mode,ownership "$SM8550_OVL/." "$R/"
 cp -f "$SM8550_OVL"/etc/inputplumber/capability_maps.d/*.yaml "$R/usr/share/inputplumber/capability_maps/"
@@ -760,6 +755,18 @@ find "$R/usr/share/alsa/ucm2/AYN" "$R/usr/share/alsa/ucm2/AYANEO" "$R/usr/share/
   "$R/etc/inputplumber" "$R/var/lib/overlays/etc/upper/inputplumber" 2>/dev/null \
   \( -type d -exec chmod 0755 {} + \) -o \( -type f -exec chmod 0644 {} + \)
 chmod 0644 "$R/usr/lib/udev/hwdb.d/10-ayaneo.hwdb"
+if [[ "${SOC:-sm8650}" == sm8250 ]]; then
+  log "== SM8250 overlay (AYANEO Pocket MICRO 2)"
+  cp -r --no-preserve=mode,ownership "$SM8250_OVL/." "$R/"
+  cp -f "$SM8250_OVL"/etc/inputplumber/capability_maps.d/*.yaml "$R/usr/share/inputplumber/capability_maps/"
+  if [[ -d "$R/var/lib/overlays/etc/upper/inputplumber" ]]; then
+    cp -r --no-preserve=mode,ownership "$SM8250_OVL/etc/inputplumber/." "$R/var/lib/overlays/etc/upper/inputplumber/"
+  fi
+  find "$R/usr/share/alsa/ucm2/AYANEO/PocketMICRO2" "$R/usr/share/alsa/ucm2/conf.d/sm8250" "$R/usr/share/alsa/ucm2/codecs/wsa881x" \
+    "$R/etc/inputplumber" "$R/var/lib/overlays/etc/upper/inputplumber" \
+    \( -type d -exec chmod 0755 {} + \) -o \( -type f -exec chmod 0644 {} + \) 2>/dev/null
+  chmod 0644 "$R/usr/lib/udev/rules.d/99-sm8250-wcd938x-nosleep.rules"
+fi
 # 8 Gen 2 image: Wi-Fi firmware from upstream linux-firmware (pinned tag and
 # hashes). The Frame's WCN7850 board file only has the Frame's own 2 boards,
 # so the 8 Gen 2 handhelds fell back to generic radio data; upstream has 67

@@ -5,8 +5,8 @@
 #   SM8550: card "AYN-Odin2" (Odin 2 / Mini / Portal, Retroid Pocket 6 / Nova:
 #     aw88166 amps on MI2S), "AYN-Thor", "SM8550-APS" (AYANEO Pockets:
 #     WSA884x), UCM from ROCKNIX.
-#   SM8350 (REDMAGIC 6): card "sm8250 - REDMAGIC 6", fully set up by its UCM
-#     (conf.d/sm8250/REDMAGIC 6.conf) when WirePlumber opens it.
+#   SM8350 (REDMAGIC 6), SM8250 (AYANEO Pocket MICRO 2): cards "sm8250 - REDMAGIC 6",
+#     "PocketMICRO2", fully set up by their UCM (conf.d/sm8250/) when WirePlumber opens them.
 # Name kept as sm8550-audio-setup so the existing units/udev rule apply.
 set +e
 export PATH="/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
@@ -32,7 +32,7 @@ done
 wait_card() {
   local i
   for i in $(seq 1 80); do
-    grep -qiE 'APS|SM8650|AYN|Odin2|Thor|sm8550|REDMAGIC' /proc/asound/cards 2>/dev/null && return 0
+    grep -qiE 'APS|SM8650|AYN|Odin2|Thor|sm8550|REDMAGIC|PocketMICRO2' /proc/asound/cards 2>/dev/null && return 0
     sleep 0.25
   done
   return 1
@@ -44,10 +44,9 @@ if ! wait_card; then
   exit 0
 fi
 
-# REDMAGIC 6: nothing to do here. Before it matched above, every boot sat
-# out the whole 20 s wait while WirePlumber waited on us.
-if grep -qi 'REDMAGIC' /proc/asound/cards; then
-  log "REDMAGIC 6 card: UCM applied by WirePlumber"
+ucm_card="$(grep -oiE 'REDMAGIC 6|PocketMICRO2' /proc/asound/cards | head -1)"
+if [[ -n "$ucm_card" ]]; then
+  log "${ucm_card} card: UCM applied by WirePlumber"
   exit 0
 fi
 

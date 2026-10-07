@@ -13,13 +13,8 @@ export PATH="/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
 if grep -qaE "REDMAGIC 6" /sys/firmware/devicetree/base/model 2>/dev/null; then
   exit 0
 fi
-# The Pocket FIT and Pocket S2 route everything through their UCM HiFi
-# profiles (speaker, headphones, DisplayPort), with no vendor I2S path: just
-# switch between their own profiles, no mixers and no pro-audio. WirePlumber
-# alone never left "HiFi (Headphones, Speaker)" for "HiFi (HDMI0, Speaker)"
-# (same priority, both "available"), so a TV or monitor got no sound.
 UCM_ONLY=0
-if grep -qaE "KONKR Pocket FIT|AYANEO Pocket S2" /sys/firmware/devicetree/base/model 2>/dev/null; then
+if grep -qaE "KONKR Pocket FIT|AYANEO Pocket S2|AYANEO Pocket MICRO 2" /sys/firmware/devicetree/base/model 2>/dev/null; then
   UCM_ONLY=1
 fi
 

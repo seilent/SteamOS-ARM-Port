@@ -1,0 +1,1 @@
+ACTION=="bind", SUBSYSTEM=="soundwire", KERNEL=="sdw:*:0217:010d:*", PROGRAM=="/usr/bin/grep -qa qcom,sm8250 /sys/firmware/devicetree/base/compatible", ATTR{power/control}="on"

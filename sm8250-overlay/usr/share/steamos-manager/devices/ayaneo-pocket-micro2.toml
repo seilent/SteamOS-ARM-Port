@@ -1,0 +1,5 @@
+[[device]]
+dt.compatible = "ayaneo,pocket-micro2"
+device = "ayaneo_pocket_micro2"
+variant = "PocketMICRO2"
+friendly_name = "AYANEO Pocket MICRO 2"
