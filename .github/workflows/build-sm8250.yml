@@ -510,6 +510,11 @@ jobs:
           python3 -m json.tool "$c" >/dev/null
           python3 -m py_compile steamos-overlay/usr/lib/steamos-arm/hub/hub.py steamos-overlay/usr/lib/steamos-arm/power_limits.py
           node --check external-and-mods/Decky/common/loadout/dist/index.js
+      - name: Update tools list sm8250
+        run: |
+          python3 -m py_compile external-and-mods/konkr-update/konkr-update.py
+          python3 scripts/build-update-package.py --help | grep -q sm8250
+          python3 scripts/build-update-v2.py --help | grep -q sm8250
       - name: Check image
         run: |
           m=$W/newmnt

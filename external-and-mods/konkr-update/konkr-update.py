@@ -27,6 +27,7 @@ SOC_MODELS = {
                'AYANEO Pocket EVO', 'AYANEO Pocket S 1K', 'AYANEO Pocket S 2K',
                'Retroid Pocket 6', 'Retroid Pocket 6 TOP-DPAD', 'Retroid Pocket Nova'],
     'sm8750': ['AYN Odin 3', 'KONKR Pocket FIT Elite'],
+    'sm8250': ['AYANEO Pocket MICRO 2'],
 }
 SUPPORTED_MODELS = {m for models in SOC_MODELS.values() for m in models}
 ROOT_DIRS = ('usr', 'opt', 'etc')
