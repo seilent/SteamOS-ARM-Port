@@ -33,7 +33,7 @@ for (const n of ["status", "discover", "jobs", "install", "update", "remove", "c
     "steam_gone", "icon"]) E[n] = callable(n);
 
 const ROUTE = "/loadout";
-const CHIP_NAMES = { sm8350: "Snapdragon 888", sm8550: "Snapdragon 8 Gen 2", sm8650: "Snapdragon 8 Gen 3", sm8750: "Snapdragon 8 Elite" };
+const CHIP_NAMES = { sm8250: "Snapdragon 865", sm8350: "Snapdragon 888", sm8550: "Snapdragon 8 Gen 2", sm8650: "Snapdragon 8 Gen 3", sm8750: "Snapdragon 8 Elite" };
 const PROTONS = [
     { data: "proton_experimental", label: "Proton Experimental" },
     { data: "proton_11", label: "Proton 11" },

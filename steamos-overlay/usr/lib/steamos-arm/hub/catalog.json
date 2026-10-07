@@ -6,7 +6,7 @@
   "release files (AppImage), flathub (user install), builtin (ships with the",
   "image). 'heavy_below' marks a chip it struggles on; 'starter' is the",
   "lowest chip it is part of the one-tap starter set from.",
-  "Chips in order: sm8350 < sm8550 < sm8650 < sm8750.",
+  "Chips in order: sm8250 < sm8350 < sm8550 < sm8650 < sm8750.",
   "'unpack' (with 'start'): the release file is a .tar.* holding one app folder,",
   "unpacked into ~/Applications/<unpack> and started through <start>.",
   "_bundles: ready-made sets the store offers in one tap (only what's missing installs)."
@@ -34,7 +34,7 @@
     "psx"
    ],
    "icon": "flathub:org.libretro.RetroArch",
-   "starter": "sm8350",
+   "starter": "sm8250",
    "setup": "retroarch",
    "esde": "RETROARCH",
    "sources": [
@@ -53,7 +53,7 @@
     "psp"
    ],
    "icon": "flathub:org.ppsspp.PPSSPP",
-   "starter": "sm8350",
+   "starter": "sm8250",
    "setup": "ppsspp",
    "esde": "PPSSPP",
    "save_as": "PPSSPP.AppImage",
@@ -78,7 +78,7 @@
     "psx"
    ],
    "icon": "flathub:org.duckstation.DuckStation",
-   "starter": "sm8350",
+   "starter": "sm8250",
    "setup": "duckstation",
    "esde": "DUCKSTATION",
    "save_as": "DuckStation.AppImage",
@@ -100,7 +100,7 @@
     "nds"
    ],
    "icon": "flathub:net.kuribo64.melonDS",
-   "starter": "sm8350",
+   "starter": "sm8250",
    "setup": "melonds",
    "esde": "MELONDS",
    "save_as": "melonDS.AppImage",
@@ -136,7 +136,7 @@
     "n3ds"
    ],
    "icon": "flathub:org.azahar_emu.Azahar",
-   "starter": "sm8350",
+   "starter": "sm8250",
    "setup": "azahar",
    "esde": "AZAHAR",
    "save_as": "Azahar.AppImage",
@@ -535,7 +535,7 @@
    "plays": "one game library for every emulator, with box art",
    "kind": "frontend",
    "icon": "gitlab:https://gitlab.com/es-de/emulationstation-de",
-   "starter": "sm8350",
+   "starter": "sm8250",
    "setup": "esde",
    "save_as": "ES-DE.AppImage",
    "sources": [

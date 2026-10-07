@@ -19,7 +19,7 @@ Item {
     })
     readonly property var updates: (st.apps || []).filter(function (a) { return a.update })
     readonly property bool onSd: (st.sd || []).some(function (m) { return (st.library || "").indexOf(m) === 0 })
-    readonly property var chipNames: ({ sm8350: "Snapdragon 888", sm8550: "Snapdragon 8 Gen 2", sm8650: "Snapdragon 8 Gen 3", sm8750: "Snapdragon 8 Elite" })
+    readonly property var chipNames: ({ sm8250: "Snapdragon 865", sm8350: "Snapdragon 888", sm8550: "Snapdragon 8 Gen 2", sm8650: "Snapdragon 8 Gen 3", sm8750: "Snapdragon 8 Elite" })
     property string note: ""
 
     function poll() { Ui.request("GET", "/hub", undefined, function (r) { if (r && r.apps) hp.st = r }) }

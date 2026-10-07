@@ -502,6 +502,14 @@ jobs:
                    sm8650-overlay/usr/lib/steamos/sm8550-audio-setup steamos-overlay/usr/lib/steamos/sm8550-audio-pipewire; do
             bash -n "$f"
           done
+      - name: Hub catalog and Python
+        run: |
+          c=steamos-overlay/usr/lib/steamos-arm/hub/catalog.json
+          test "$(python3 -c 'import json,sys; print(" ".join(sorted(a["id"] for a in json.load(open(sys.argv[1]))["apps"] if a.get("starter") == "sm8250")))' "$c")" = "azahar duckstation esde melonds ppsspp retroarch"
+          test "$(grep -c '"starter": "sm8350"' "$c")" = 0
+          python3 -m json.tool "$c" >/dev/null
+          python3 -m py_compile steamos-overlay/usr/lib/steamos-arm/hub/hub.py steamos-overlay/usr/lib/steamos-arm/power_limits.py
+          node --check external-and-mods/Decky/common/loadout/dist/index.js
       - name: Check image
         run: |
           m=$W/newmnt
