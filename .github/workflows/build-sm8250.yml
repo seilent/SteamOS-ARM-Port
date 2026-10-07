@@ -415,8 +415,8 @@ jobs:
           for t in gcc cmake ninja; do test -x "$m/usr/bin/$t" || { echo "base rootfs has no $t" >&2; exit 1; }; done
           compgen -G "$m/usr/lib/libgallium-*.so" >/dev/null || { echo "base rootfs has no Mesa in /usr/lib" >&2; exit 1; }
           compgen -G "$m/opt/stock-steamos/usr/lib/libgallium-*.so" >/dev/null || { echo "base rootfs has no Valve Mesa in /opt/stock-steamos" >&2; exit 1; }
-          mesa=$(grep -a -o -h -m1 'Mesa [0-9.]*' "$m"/usr/lib/libgallium-*.so | head -n 1)
-          valve=$(grep -a -o -h -m1 'Mesa [0-9.]*' "$m"/opt/stock-steamos/usr/lib/libgallium-*.so | head -n 1)
+          mesa=$(grep -a -o -h -m1 'Mesa [0-9][0-9.]*' "$m"/usr/lib/libgallium-*.so | head -n 1)
+          valve=$(grep -a -o -h -m1 'Mesa [0-9][0-9.]*' "$m"/opt/stock-steamos/usr/lib/libgallium-*.so | head -n 1)
           { echo "base Mesa: $mesa"; echo "base Valve Mesa: $valve"; } >>"$GITHUB_STEP_SUMMARY"
           [[ "$mesa" == "Mesa 26.2.3" ]] || { echo "base Mesa is $mesa, not 26.2.3" >&2; exit 1; }
           [[ "$valve" == "Mesa 26.3"* ]] || { echo "base Valve Mesa is $valve, not 26.3" >&2; exit 1; }
@@ -444,7 +444,7 @@ jobs:
           sudo grep -qx 'MESA_LOADER_DRIVER_OVERRIDE=zink' "$R/usr/lib/environment.d/60-sm8550-zink.conf"
           sudo test ! -e "$R/usr/lib/steamos-sm8650/frame-turnip"
           sudo test ! -e "$R/usr/share/steamos-sm8650/frame-turnip_icd.aarch64.json"
-          mesa=$(sudo grep -a -o -h -m1 'Mesa [0-9.]*' "$R"/usr/lib/libgallium-*.so | head -n 1)
+          mesa=$(sudo grep -a -o -h -m1 'Mesa [0-9][0-9.]*' "$R"/usr/lib/libgallium-*.so | head -n 1)
           test "$mesa" = 'Mesa 26.2.3'
           grep -qx 'SD865:BOOL=ON' /tmp/box64-build-frame/CMakeCache.txt
           test "$(sudo cat "$R/usr/local/share/box64-target")" = SD865
