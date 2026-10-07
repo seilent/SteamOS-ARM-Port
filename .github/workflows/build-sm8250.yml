@@ -354,6 +354,8 @@ jobs:
             scripts/build-plasma-keyboard.sh
             scripts/build-kde-gear-26.04.2.sh
             scripts/build-ark-26.04.2.sh
+            scripts/build-v4l2-vaapi.sh
+            scripts/install-v4l2-vaapi.sh
           )
           changed="$(git diff --name-only "$BASE_SHA" HEAD -- "${paths[@]}")"
           if [ -n "$changed" ]; then
@@ -421,6 +423,8 @@ jobs:
           [[ "$mesa" == "Mesa 26.2.3" ]] || { echo "base Mesa is $mesa, not 26.2.3" >&2; exit 1; }
           [[ "$valve" == "Mesa 26.3"* ]] || { echo "base Valve Mesa is $valve, not 26.3" >&2; exit 1; }
           test -f "$m/usr/lib/environment.d/60-sm8550-zink.conf" || { echo "base rootfs has no zink env" >&2; exit 1; }
+          sudo bash -c 'cd "$1" && sha256sum usr/bin/mangoapp usr/bin/NetworkManager usr/lib/NetworkManager/*/libnm-device-plugin-wifi.so' _ "$m" | tee "$RUNNER_TEMP/base-builds.sha256"
+          test "$(wc -l <"$RUNNER_TEMP/base-builds.sha256")" -eq 3
       - name: Build image
         run: |
           quiet=1
@@ -452,6 +456,16 @@ jobs:
           test -n "$ref"
           test "$(sudo git -c safe.directory='*' -C "$W/box64" rev-parse HEAD)" = "$ref"
           sudo ls "$R/usr/lib/binfmt.d/box64.conf" "$R/etc/binfmt.d/box64.conf"
+          test "$(sudo strings "$R/usr/bin/mangoapp" | grep -c 'GLIBC_2\.43' || true)" = 0
+          sudo bash -c 'cd "$1" && sha256sum -c --quiet "$2"' _ "$R" "$RUNNER_TEMP/base-builds.sha256"
+          grep -qF 'konkr-android: no payload in' "$L"
+          sudo test -s "$R/usr/share/konkr-android/common/system/product/priv-app/Phonesky/Phonesky.apk"
+          sudo test -f "$R/usr/lib/lv2/dpl.lv2/dpl.so"
+          sudo test -f "$R/usr/lib/dri/msm_drv_video.so"
+          sudo test -f "$R/usr/lib/qt6/plugins/plasma/kcms/systemsettings/kcm_kscreen.so"
+          sudo test -f "$R/usr/lib/qt6/plugins/plasma/kcms/systemsettings_qwidgets/kcm_networkmanagement.so"
+          sudo test -x "$R/usr/bin/plasma-keyboard"
+          if grep -E '^== (official |KF6 NetworkManagerQt|plasma-keyboard )' "$L"; then echo "a KDE build the base image carries ran again" >&2; exit 1; fi
           test "$(sudo ls "$R/usr/lib/modules")" = "$KREL"
           source external-and-mods/kernel-sm8250/soc.env
           n=0
