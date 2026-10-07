@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Kernel for SteamOS ARM, one build per SoC:
-#   bash external-and-mods/kernel-common/build.sh sm8650|sm8550
+#   bash external-and-mods/kernel-common/build.sh sm8650|sm8550|sm8750|sm8250
 # (external-and-mods/kernel-<soc>/build.sh does the same).
 #
 # Sources (pinned in kernel-<soc>/soc.env):
 #   linux-${KVER}             kernel.org
-#   ROCKNIX distribution      per-SoC patches, DTS, kernel config
+#   ROCKNIX or armada         per-SoC patches, DTS, kernel config
 #   ROCKNIX extra-firmware    vendor-signed ADSP/CDSP/zap, WCN7850, audio tplg
 #   linux-firmware            Adreno microcode where ROCKNIX takes it from upstream
 #   ROCKNIX chipone_tddi      out-of-tree touchscreen driver
@@ -27,7 +27,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT_ROOT="$(cd "${HERE}/../.." && pwd)"
 
 SOC_ARG="${1:-}"
-[[ "$SOC_ARG" =~ ^[a-z0-9]+$ ]] || { echo "usage: $0 <sm8650|sm8550|sm8750|<device>> [--repack-boot]" >&2; exit 2; }
+[[ "$SOC_ARG" =~ ^[a-z0-9]+$ ]] || { echo "usage: $0 <sm8650|sm8550|sm8750|sm8250|<device>> [--repack-boot]" >&2; exit 2; }
 shift
 SOC_DIR="${PORT_ROOT}/external-and-mods/kernel-${SOC_ARG}"
 [[ -f "${SOC_DIR}/soc.env" ]] || { echo "no ${SOC_DIR}/soc.env" >&2; exit 2; }
@@ -43,7 +43,8 @@ read -ra PORT_DIRS_A <<<"${PORT_DIRS:-kernel-${SOC_ARG}}"
 port_dir() { echo "${PORT_ROOT}/external-and-mods/$1"; }
 
 LOCALVERSION="${LOCALVERSION:--${KNAME}-steamos}"
-ROCKNIX_DIR="${ROCKNIX_DIR:-${PORT_ROOT}/../rocknix-${ROCKNIX_REF}}"
+ROCKNIX_DIR="${ROCKNIX_DIR:-${PORT_ROOT}/../rocknix-${ROCKNIX_REF:-}}"
+ARMADA_DIR="${ARMADA_DIR:-${PORT_ROOT}/../armada-${ARMADA_REF:-}}"
 TDDI_REF="${TDDI_REF:-af27029fa2b27c4a77d16809298ed5d03c9da5a6}"
 DTBS="${DTBS_OVERRIDE:-$DTBS}"
 
@@ -80,25 +81,28 @@ fetch() {
 }
 
 rocknix_path() { echo "${ROCKNIX_DIR}/$1"; }
+armada_path() { echo "${ARMADA_DIR}/packages/kernel/$1"; }
+
+pinned_checkout() {
+  [[ -e "$1/.git" ]] || die "$3 source needs Git metadata to verify the pinned revision"
+  [[ "$(git -C "$1" rev-parse HEAD)" == "$(git -C "$1" rev-parse "$2^{commit}")" ]] || die "$3 checkout does not match pinned $2"
+}
 
 prepare_source() {
-  if [[ -e "$ROCKNIX_DIR/.git" ]]; then  # a directory, or a file in a worktree
-    [[ "$(git -C "$ROCKNIX_DIR" rev-parse HEAD)" == "$(git -C "$ROCKNIX_DIR" rev-parse "${ROCKNIX_REF}^{commit}")" ]] || die "ROCKNIX checkout does not match pinned ${ROCKNIX_REF}"
-  else
-    die "ROCKNIX source needs Git metadata to verify the pinned revision"
-  fi
+  [[ -z "${ROCKNIX_REF:-}" ]] || pinned_checkout "$ROCKNIX_DIR" "$ROCKNIX_REF" ROCKNIX
+  [[ -z "${ARMADA_REF:-}" ]] || pinned_checkout "$ARMADA_DIR" "$ARMADA_REF" armada
   # KSRC_URL (soc.env): a kernel tree's source tarball instead of kernel.org's
   # release, for a device whose support isn't in mainline or ROCKNIX yet.
   local tarball="${CACHE}/linux-${KVER}.tar.xz"
   if [[ -n "${KSRC_URL:-}" ]]; then
     tarball="${CACHE}/linux-${KNAME}-${KSRC_URL##*/}"
     fetch "$KSRC_URL" "$tarball"
-    [[ -z "${KSRC_SHA256:-}" ]] || echo "${KSRC_SHA256}  ${tarball}" | sha256sum -c --quiet || die "source hash mismatch: $tarball"
   else
     fetch "https://cdn.kernel.org/pub/linux/kernel/v${KVER%%.*}.x/linux-${KVER}.tar.xz" "$tarball"
   fi
+  [[ -z "${KSRC_SHA256:-}" ]] || echo "${KSRC_SHA256}  ${tarball}" | sha256sum -c --quiet || die "source hash mismatch: $tarball"
   local patch_digest pd
-  patch_digest="$( { echo "${KSRC_URL:-} $PATCH_DIRS ${PATCH_SKIP:-} ${PORT_DIRS_A[*]}"; for pd in "${PORT_DIRS_A[@]}"; do pd="$(port_dir "$pd")"; find "$pd" -path "${pd}/patches/*" -type f -o -path "${pd}/dts/*" -type f | sort; done | xargs -r sha256sum | cut -d" " -f1; } | sha256sum | cut -d" " -f1)"
+  patch_digest="$( { echo "${KSRC_URL:-} $PATCH_DIRS ${PATCH_SKIP:-} ${PORT_DIRS_A[*]}${ARMADA_REF:+ $ARMADA_REF}"; for pd in "${PORT_DIRS_A[@]}"; do pd="$(port_dir "$pd")"; find "$pd" -path "${pd}/patches/*" -type f -o -path "${pd}/dts/*" -type f | sort; done | xargs -r sha256sum | cut -d" " -f1; } | sha256sum | cut -d" " -f1)"
   if [[ -f "${SRC}/.${KNAME}-patched" && "$(cat "${SRC}/.${KNAME}-patched")" == "$patch_digest" ]]; then
     log "source already patched: ${SRC}"
     return 0
@@ -120,7 +124,22 @@ prepare_source() {
     tar -C "$WORK" -xf "$tarball"
   fi
 
-  # ROCKNIX patch dirs in soc.env order, then ours.
+  if [[ -n "${ARMADA_REF:-}" ]]; then
+    local entry ap plog want got
+    while read -r entry; do
+      ap="$(armada_path "patches/${entry}")"
+      [[ -f "$ap" ]] || die "armada series entry missing: ${entry}"
+      want="$(grep -c '^@@ ' "$ap" || true)"
+      plog="$(patch -d "$SRC" -p1 -N -F0 --batch --dry-run --verbose <"$ap" 2>&1)" \
+        || die "patch preflight failed: armada/${entry}"
+      got="$(grep -c '^Hunk #[0-9].*succeeded' <<<"$plog" || true)"
+      [[ "$got" == "$want" ]] || die "armada/${entry}: ${got}/${want} hunks"
+      log "patch armada/${entry}"
+      patch -d "$SRC" -p1 -N -F0 --batch --no-backup-if-mismatch -s <"$ap" \
+        || die "patch failed: armada/${entry}"
+    done < <(sed 's/#.*//' "$(armada_path patches/series)" | awk 'NF { print $1 }')
+  fi
+
   local d p
   local -a dirs
   read -ra dirs <<<"$PATCH_DIRS"
@@ -143,16 +162,21 @@ prepare_source() {
     done
   done
 
-  # SKIP_ROCKNIX_DTS=1 (soc.env): a device tree's own source tree, where
-  # ROCKNIX's trees for that SoC don't belong.
   if [[ "${SKIP_ROCKNIX_DTS:-0}" != 1 ]]; then
     log "install ROCKNIX ${ROCKNIX_DEVICE} DTS"
     cp -v "$(rocknix_path "projects/ROCKNIX/devices/${ROCKNIX_DEVICE}/linux/dts/qcom")"/*.dts* \
       "${SRC}/arch/arm64/boot/dts/qcom/" >&2
   fi
-  # Whole device trees of our own (a device ROCKNIX doesn't carry), then the
-  # appends onto ROCKNIX's or our trees.
   local app f
+  if [[ -n "${ARMADA_REF:-}" ]]; then
+    log "install armada DTS"
+    cp "$(armada_path dts)"/*.dts "$(armada_path dts)"/*.dtsi "${SRC}/arch/arm64/boot/dts/qcom/"
+    for f in "$(armada_path dts)"/*.patch; do
+      [[ -e "$f" ]] || continue
+      log "patch armada/dts/$(basename "$f")"
+      patch -d "$SRC" -p1 -N -F0 --batch --no-backup-if-mismatch -s <"$f" || die "patch failed: $f"
+    done
+  fi
   for pd in "${PORT_DIRS_A[@]}"; do
     for f in "$(port_dir "$pd")"/dts/*.dts "$(port_dir "$pd")"/dts/*.dtsi; do
       [[ -e "$f" ]] || continue
@@ -177,15 +201,15 @@ prepare_source() {
 }
 
 stage_builtin_firmware() {
-  # GPU microcode + zap and the regulatory db are needed before the rootfs
-  # is mounted, so they go into the kernel image (like ROCKNIX does).
-  local fwtar="${CACHE}/extra-firmware-${EXTRA_FW_REF}.tar.gz"
-  fetch "https://github.com/ROCKNIX/extra-firmware/archive/${EXTRA_FW_REF}.tar.gz" "$fwtar"
   EXTRA_FW_SRC="${WORK}/extra-firmware"
-  if [[ ! -d "${EXTRA_FW_SRC}/${ROCKNIX_DEVICE}" || "$(cat "${EXTRA_FW_SRC}/.ref" 2>/dev/null)" != "$EXTRA_FW_REF" ]]; then
-    rm -rf "$EXTRA_FW_SRC"; mkdir -p "$EXTRA_FW_SRC"
-    tar -C "$EXTRA_FW_SRC" --strip-components=1 -xzf "$fwtar"
-    echo "$EXTRA_FW_REF" >"${EXTRA_FW_SRC}/.ref"
+  if [[ -n "${EXTRA_FW_REF:-}" ]]; then
+    local fwtar="${CACHE}/extra-firmware-${EXTRA_FW_REF}.tar.gz"
+    fetch "https://github.com/ROCKNIX/extra-firmware/archive/${EXTRA_FW_REF}.tar.gz" "$fwtar"
+    if [[ ! -d "${EXTRA_FW_SRC}/${ROCKNIX_DEVICE}" || "$(cat "${EXTRA_FW_SRC}/.ref" 2>/dev/null)" != "$EXTRA_FW_REF" ]]; then
+      rm -rf "$EXTRA_FW_SRC"; mkdir -p "$EXTRA_FW_SRC"
+      tar -C "$EXTRA_FW_SRC" --strip-components=1 -xzf "$fwtar"
+      echo "$EXTRA_FW_REF" >"${EXTRA_FW_SRC}/.ref"
+    fi
   fi
   local regdb="${CACHE}/wireless-regdb"
   if [[ ! -f "${regdb}/regulatory.db" ]]; then
@@ -218,16 +242,18 @@ stage_builtin_firmware() {
 }
 
 configure() {
-  # KCONFIG (soc.env): the base config of a device's own source tree, a file
-  # in kernel-<device>/, instead of ROCKNIX's for the SoC.
   local cfg
-  if [[ -n "${KCONFIG:-}" ]]; then
-    cfg="${SOC_DIR}/${KCONFIG}"
+  if [[ "${KCONFIG:-}" == defconfig ]]; then
+    make -C "$SRC" defconfig >/dev/null
   else
-    cfg="$(rocknix_path "projects/ROCKNIX/devices/${ROCKNIX_DEVICE}/linux/linux.aarch64.conf")"
+    if [[ -n "${KCONFIG:-}" ]]; then
+      cfg="${SOC_DIR}/${KCONFIG}"
+    else
+      cfg="$(rocknix_path "projects/ROCKNIX/devices/${ROCKNIX_DEVICE}/linux/linux.aarch64.conf")"
+    fi
+    [[ -f "$cfg" ]] || die "missing base config $cfg"
+    cp "$cfg" "${SRC}/.config"
   fi
-  [[ -f "$cfg" ]] || die "missing base config $cfg"
-  cp "$cfg" "${SRC}/.config"
   local sc="${SRC}/scripts/config --file ${SRC}/.config"
   # ROCKNIX embeds its own initramfs through this placeholder; ours goes
   # there too with EMBED_INITRAMFS (uncompressed: the whole Image is gzipped
@@ -256,10 +282,10 @@ configure() {
   else
     $sc --set-str EXTRA_FIRMWARE ""
   fi
-  # Merge the SteamOS fragment (see steamos.config for why each is needed),
-  # then the SoC's own (kernel-<soc>/steamos.config), if any.
   local frag="${WORK}/steamos.config.merged"
-  cat "${HERE}/steamos.config" >"$frag"
+  : >"$frag"
+  [[ -z "${ARMADA_REF:-}" ]] || sed -E 's/^# (CONFIG_[A-Za-z0-9_]+) is not set$/\1=n/; s/[[:space:]]*#.*$//' "$(armada_path config/armada-kernel.config.overrides)" >>"$frag"
+  cat "${HERE}/steamos.config" >>"$frag"
   local pd
   for pd in "${PORT_DIRS_A[@]}"; do
     [[ -f "$(port_dir "$pd")/steamos.config" ]] && cat "$(port_dir "$pd")/steamos.config" >>"$frag"
@@ -359,8 +385,7 @@ install_output() {
   rm -f "$o/modules/${KREL}/build" "$o/modules/${KREL}/source"
 
   log "firmware (rootfs part: remoteprocs, audio topology, Wi-Fi/BT)"
-  cp -a "${EXTRA_FW_SRC}/${ROCKNIX_DEVICE}/." "$o/firmware/"
-  # Built-in copies are enough for the GPU; keep rootfs copies too for tooling.
+  [[ -z "${EXTRA_FW_REF:-}" ]] || cp -a "${EXTRA_FW_SRC}/${ROCKNIX_DEVICE}/." "$o/firmware/"
   cp -a "${SRC}/external-firmware/." "$o/firmware/"
 
   local dtb
@@ -395,8 +420,10 @@ main() {
     return
   fi
   check_deps
-  [[ -d "$ROCKNIX_DIR/projects/ROCKNIX/devices/${ROCKNIX_DEVICE}" ]] \
+  [[ -z "${ROCKNIX_REF:-}" || -d "$ROCKNIX_DIR/projects/ROCKNIX/devices/${ROCKNIX_DEVICE}" ]] \
     || die "ROCKNIX tree not found at ${ROCKNIX_DIR} (sparse clone of ROCKNIX/distribution@${ROCKNIX_REF})"
+  [[ -z "${ARMADA_REF:-}" || -f "$(armada_path patches/series)" ]] \
+    || die "armada tree not found at ${ARMADA_DIR} (clone of armada@${ARMADA_REF})"
   mkdir -p "$CACHE"
   prepare_source
   stage_builtin_firmware
