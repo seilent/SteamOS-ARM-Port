@@ -73,8 +73,7 @@ chmod 0644 "$R/boot/KERNEL" "$R/boot/KERNEL.md5"
 keep=()
 for k in "${KOUTS[@]}"; do keep+=(! -name "$(basename "$k")"); done
 find "$R/usr/lib/modules" -mindepth 1 -maxdepth 1 "${keep[@]}" -exec rm -rf {} +
-# Kernel info from older builds (flat layout, or kernels no longer shipped).
-find "$R/opt/steamos-sm8650" -mindepth 1 -maxdepth 1 ! -name IMAGE.txt "${keep[@]}" -exec rm -rf {} +
+find "$R/opt/steamos-sm8650" -mindepth 1 -maxdepth 1 ! -name IMAGE.txt ! -name RELEASE-BASE.txt "${keep[@]}" -exec rm -rf {} +
 for k in "${KOUTS[@]}"; do
   kr="$(basename "$k")"
   rm -rf "$R/usr/lib/modules/$kr"

@@ -59,6 +59,8 @@ if [[ -z "${HOME_MIB:-}" ]]; then
   HOME_MIB=1024
 fi
 
+SRC_IMG=""
+BASE_INFO=""
 SKIP_DOWNLOAD=0
 SKIP_APPLY=0
 SKIP_BOX64=0
@@ -83,6 +85,8 @@ usage() {
   cat <<EOF
 Usage: $0 [options]
 
+  --from-img IMG    Start from the p2 root and p3 home of a released card
+                    image instead of Valve's rootfs (needs its own STEAMOS_ROOTFS)
   --skip-download   Reuse existing official rootfs/ chunks
   --skip-apply      Do not re-run scripts/apply-overlays.sh
   --skip-box64      Do not rebuild Box64
@@ -97,6 +101,7 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --from-img) SRC_IMG="$(readlink -f "$2")"; shift ;;
     --skip-download) SKIP_DOWNLOAD=1 ;;
     --skip-apply) SKIP_APPLY=1 ;;
     --skip-box64) SKIP_BOX64=1 ;;
@@ -144,6 +149,43 @@ ensure_official_rootfs() {
   sudo_run rsync -aHAX --filter="-x btrfs.*" --numeric-ids "${WORKDIR}/.rootfs-ro/" "${R}/"
   sudo_run umount "${WORKDIR}/.rootfs-ro"
   [[ -x "${R}/usr/bin/bash" ]] || die "unpacked rootfs has no /usr/bin/bash"
+}
+
+copy_from_img() {
+  local gs b
+  [[ -f "${SRC_IMG}" ]] || die "no image ${SRC_IMG}"
+  [[ "$(readlink -m "${R}")" != "$(readlink -m "${WORKDIR}/rootfs")" ]] \
+    || die "--from-img needs its own STEAMOS_ROOTFS, not ${WORKDIR}/rootfs"
+  log "Release image $(basename "${SRC_IMG}")"
+  LOOPDEV="$(sudo_run losetup -f --show -r -P "${SRC_IMG}")"
+  trap cleanup_image EXIT
+  for _ in $(seq 1 50); do [[ -b "${LOOPDEV}p3" ]] && break; sleep 0.1; done
+  [[ -b "${LOOPDEV}p2" && -b "${LOOPDEV}p3" ]] \
+    || die "${SRC_IMG} is not a SteamOS ARM card image (p2 root, p3 home)"
+  mkdir -p "${MNT}/root" "${MNT}/home" "${R}"
+  sudo_run mount -o ro "${LOOPDEV}p2" "${MNT}/root"
+  sudo_run mount -o ro "${LOOPDEV}p3" "${MNT}/home"
+  [[ -x "${MNT}/root/usr/bin/bash" && -f "${MNT}/root/opt/steamos-sm8650/IMAGE.txt" ]] \
+    || die "p2 is not a SteamOS ARM root"
+  BASE_INFO="$(cat "${MNT}/root/opt/steamos-sm8650/IMAGE.txt")"
+  log "$(tr '\n' ' ' <<<"${BASE_INFO}")"
+  log "Copying root + home to ${R}"
+  sudo_run rsync -aHAX --numeric-ids --delete --info=progress2 "${MNT}/root/" "${R}/"
+  sudo_run mkdir -p "${R}/home"
+  sudo_run rsync -aHAX --numeric-ids --delete --exclude=/lost+found "${MNT}/home/" "${R}/home/"
+  cleanup_image
+  trap - EXIT
+  if [[ ! -x "${GAMESCOPE_BUILD:-${WORKDIR}/gamescope-build}/src/gamescope" ]]; then
+    gs="${WORKDIR}/gamescope-from-img"
+    log "Taking gamescope from the release image (${gs})"
+    rm -rf "${gs}"
+    mkdir -p "${gs}/src" "${gs}/layer"
+    for b in gamescope gamescopectl gamescopereaper gamescopestream; do
+      cp -a "${R}/usr/local/bin/${b}" "${gs}/src/${b}"
+    done
+    cp -a "${R}/usr/local/lib/libVkLayer_FROG_gamescope_wsi_aarch64.so" "${gs}/layer/"
+    export GAMESCOPE_BUILD="${gs}"
+  fi
 }
 
 apply_mods() {
@@ -526,8 +568,12 @@ EOF
 }
 
 if [[ "$IMAGE_ONLY" -eq 0 ]]; then
+  [[ -n "${SRC_IMG}" ]] && copy_from_img
   ensure_official_rootfs
   apply_mods
+  if [[ -n "${BASE_INFO}" ]]; then
+    printf '%s\n' "${BASE_INFO}" >"${R}/opt/steamos-sm8650/RELEASE-BASE.txt"
+  fi
   build_box64
 fi
 # Always refresh runtime bits before packing
