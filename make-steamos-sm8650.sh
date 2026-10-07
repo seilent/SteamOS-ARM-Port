@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# Build a flashable SteamOS ARM image for one SoC (SOC=sm8650 default, or sm8550):
+# Build a flashable SteamOS ARM image for one SoC (SOC=sm8650 default, sm8550 or sm8250):
 #   sm8650: KONKR Pocket FIT / AYANEO Pocket S2
 #   sm8550: AYN Odin 2 / Mini / Portal / Thor, AYANEO Pocket ACE / DMG / DS /
 #           EVO / S 1K / S 2K, Retroid Pocket 6 / Nova
-# The rootfs is shared; only the kernel on p1 (and its modules/firmware,
-# installed by apply-overlays) is per SoC.
 #   p1 vfat BOOT  — ABL KERNEL
 #   p2 ext4 root  — system
 #   p3 ext4 home  — user data, grown to the end of the card on first boot
@@ -30,10 +28,11 @@ case "$SOC" in
     else
       _kdef="${WORKDIR}/kernel-sm8550/output/current"
     fi ;;
-  *) echo "ERROR: unknown SOC=${SOC} (sm8650|sm8550)" >&2; exit 1 ;;
+  sm8250)
+    _kdef="${WORKDIR}/kernel-sm8250/output/current"
+    R="${STEAMOS_ROOTFS:-${WORKDIR}/rootfs-sm8250}" ;;
+  *) echo "ERROR: unknown SOC=${SOC} (sm8650|sm8550|sm8250)" >&2; exit 1 ;;
 esac
-# KOUT: this image's kernel. KERNEL_OUT (apply-overlays) may list several
-# kernels so the same rootfs carries every SoC's modules.
 KOUT="${IMAGE_KERNEL_OUT:-${_kdef}}"
 export KERNEL_OUT="${KERNEL_OUT:-${KOUT}}"
 # 8 Gen 2: our Mesa with the Adreno 740 fixes (scripts/build-mesa.sh).
@@ -93,7 +92,7 @@ Usage: $0 [options]
   --image-only      Only pack the .img from the current rootfs
   --img PATH        Output image (default: ${IMG})
 
-Env: SOC (sm8650|sm8550) BOOT_MIB ROOT_MIB HOME_MIB STEAMOS_SM8650_IMG STEAMOS_ROOTFS
+Env: SOC (sm8650|sm8550|sm8250) BOOT_MIB ROOT_MIB HOME_MIB STEAMOS_SM8650_IMG STEAMOS_ROOTFS
      IMAGE_KERNEL_OUT (this image's kernel) KERNEL_OUT (kernels for the rootfs)
      empty ROOT_MIB/HOME_MIB = auto (tight pack; home grows on first boot)
 EOF
@@ -192,7 +191,7 @@ apply_mods() {
   [[ "$SKIP_APPLY" -eq 1 ]] && { log "Skipping apply-overlays"; return 0; }
   [[ -x "${SCRIPTS}/apply-overlays.sh" ]] || die "missing scripts/apply-overlays.sh"
   log "Applying kernel / gamescope / MangoHud / Mesa / Decky / apps"
-  "${SCRIPTS}/apply-overlays.sh"
+  STEAMOS_ROOTFS="${R}" "${SCRIPTS}/apply-overlays.sh"
 }
 
 build_box64() {

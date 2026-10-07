@@ -65,6 +65,7 @@ What you get:
 | Snapdragon 8 Elite | AYN Odin 3, KONKR Pocket FIT Elite | Stable |
 | Snapdragon 8 Gen 3 | KONKR Pocket FIT, AYANEO Pocket S2 / S2 Pro | Stable |
 | Snapdragon 8 Gen 2 | AYN Odin 2 / Mini / Portal / Thor, AYANEO Pocket ACE / DMG / DS / EVO / S 1K / S 2K, Retroid Pocket 6 / Nova | Stable |
+| Snapdragon 865 | AYANEO Pocket MICRO 2 | Testing |
 
 There's one image per SoC, you pick your device in the ABL menu and it sets
 itself up. I only own a Pocket FIT, so if you have one of the others please

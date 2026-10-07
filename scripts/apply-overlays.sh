@@ -10,10 +10,6 @@ WORKDIR="${STEAMOS_WORK:-/work}"
 R="${STEAMOS_ROOTFS:-${WORKDIR}/rootfs}"
 MOD="${ROOT}/external-and-mods"
 OVL="${ROOT}/steamos-overlay"
-# KERNEL_OUT: one kernel output dir, or several separated by spaces (one per
-# SoC). All their modules + firmware go into the rootfs, so one rootfs serves
-# every SoC; the first one's KERNEL lands in /boot (the image builder puts the
-# right KERNEL on each image's boot partition).
 read -ra KOUTS <<<"${KERNEL_OUT:-${WORKDIR}/kernel-release/current}"
 for i in "${!KOUTS[@]}"; do KOUTS[$i]="$(readlink -f "${KOUTS[$i]}")"; done
 KOUT="${KOUTS[0]}"

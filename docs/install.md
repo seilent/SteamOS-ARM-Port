@@ -2,7 +2,7 @@
 
 You need a 32GB+ microSD card and a PC.
 
-1. Flash [ROCKNIX ABL](https://github.com/ROCKNIX/abl/releases) 1.1.8 or newer for your chip to `abl_a` and `abl_b`: `abl_signed-SM8650.elf` for 8 Gen 3, `abl_signed-SM8550.elf` for 8 Gen 2. Android still boots from its menu.
+1. Flash [ROCKNIX ABL](https://github.com/ROCKNIX/abl/releases) 1.1.8 or newer for your chip to `abl_a` and `abl_b`: `abl_signed-SM8650.elf` for 8 Gen 3, `abl_signed-SM8550.elf` for 8 Gen 2, `abl_signed-SM8250.elf` for Snapdragon 865. Android still boots from its menu.
 2. Download all the `.7z` parts for your chip from [Releases](https://github.com/hashtagbasit/SteamOS-ARM-Port/releases), open the `.001` one with 7-Zip or WinRAR (Keka or The Unarchiver on Mac) and extract it. Flash the `.img` you get to the microSD card with balenaEtcher or Rufus.
 3. Hold Volume Down while turning it on, go to Set device model, pick your device, set boot mode to Linux and hit START. On the Pocket S2 Pro, pick AYANEO Pocket S2.
 
