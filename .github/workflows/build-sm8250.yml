@@ -1,0 +1,302 @@
+name: Build sm8250
+
+on:
+  push:
+    branches: [pocket-micro-2, pm2-draft]
+    paths:
+      - external-and-mods/**
+      - '!external-and-mods/kernel/**'
+      - '!external-and-mods/kernel-elden/**'
+      - '!external-and-mods/kernel-sm8350/**'
+      - '!external-and-mods/kernel-sm8550/**'
+      - '!external-and-mods/kernel-sm8650/**'
+      - '!external-and-mods/kernel-sm8750/**'
+      - '!external-and-mods/kernel-tb321fu/**'
+      - sm8250-overlay/**
+      - steamos-overlay/**
+      - sm8650-overlay/**
+      - sm8550-overlay/**
+      - dualscreen-overlay/**
+      - scripts/**
+      - make-steamos-sm8650.sh
+      - .github/workflows/build-sm8250.yml
+  workflow_dispatch:
+    inputs:
+      base_tag:
+        description: Release tag of the base image
+        type: string
+        default: v1.3.0
+      base_repo:
+        description: Repository of the base release
+        type: string
+        default: hashtagbasit/SteamOS-ARM-Port
+      kernel_run_id:
+        description: Run whose kernel-sm8250 artifact to use instead of building one
+        type: string
+        default: ""
+      verbose:
+        description: Kernel log on the panel at boot
+        type: boolean
+        default: true
+      draft_release:
+        description: Publish the image as a draft release
+        type: boolean
+        default: false
+      regression:
+        description: Run kernel-regression
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  BASE_TAG: ${{ inputs.base_tag || 'v1.3.0' }}
+  BASE_REPO: ${{ inputs.base_repo || 'hashtagbasit/SteamOS-ARM-Port' }}
+  VERBOSE: ${{ github.event_name == 'workflow_dispatch' && !inputs.verbose && '0' || '1' }}
+  KERNEL_RUN_ID: ${{ inputs.kernel_run_id }}
+  BASE_SHA: 582538203e09811f8767995f2e4e8118e251796e
+  W: /home/runner/work/w
+  MOUNT: /home/runner/work
+  IMAGE: registry.fedoraproject.org/fedora@sha256:0c6072366ebf8ea1c8c0f3a118aad3e9a9247d3065d499e54d62968f69351966
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      kernel_common: ${{ steps.diff.outputs.kernel_common }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          v=false
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            if [[ "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+              files="$(git ls-tree -r --name-only HEAD)"
+            else
+              files="$(git diff --name-only "$BEFORE" "$GITHUB_SHA")"
+            fi
+            if grep -q '^external-and-mods/kernel-common/' <<<"$files"; then v=true; fi
+          fi
+          echo "kernel_common=$v" >>"$GITHUB_OUTPUT"
+
+  kernel:
+    if: ${{ inputs.kernel_run_id == '' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    steps:
+      - name: Check inputs
+        run: |
+          [[ "$BASE_TAG" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "bad base_tag" >&2; exit 1; }
+          [[ "$BASE_REPO" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "bad base_repo" >&2; exit 1; }
+          [[ "$KERNEL_RUN_ID" =~ ^[0-9]*$ ]] || { echo "bad kernel_run_id" >&2; exit 1; }
+      - uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e
+        with:
+          remove-codeql: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Host tools
+        run: |
+          docker version
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends busybox-static device-tree-compiler
+          file -L /bin/busybox | grep -q 'statically linked'
+      - name: Armada checkout
+        run: |
+          source external-and-mods/kernel-sm8250/soc.env
+          d="$(dirname "$PWD")/armada-${ARMADA_REF}"
+          git init -q "$d"
+          git -C "$d" fetch -q --depth 1 https://github.com/seilent/armada "$ARMADA_REF"
+          git -C "$d" checkout -q FETCH_HEAD
+          test "$(git -C "$d" rev-parse HEAD)" = "$ARMADA_REF"
+          n=$(sed 's/#.*//' "$d/packages/kernel/patches/series" | awk 'NF' | wc -l)
+          test "$n" -eq 186
+          echo "ARMADA_CHECKOUT=$d" >>"$GITHUB_ENV"
+      - name: Build
+        run: |
+          WORK=$W/kernel-sm8250 bash external-and-mods/kernel-common/build-gcc15.sh sm8250 2>&1 | tee "$RUNNER_TEMP/k8250.log"
+          test "${PIPESTATUS[0]}" -eq 0
+          { echo '### Compiler'; echo '```'; grep -m1 '^gcc ' "$RUNNER_TEMP/k8250.log"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+      - name: Check build log
+        run: |
+          L=$RUNNER_TEMP/k8250.log
+          n=$(grep '\] patch armada/' "$L" | grep -vc 'armada/dts/' || true)
+          test "$n" -eq 186
+          want=$(find "$ARMADA_CHECKOUT/packages/kernel/dts" -maxdepth 1 -name '*.patch' | wc -l)
+          n=$(grep -c '\] patch armada/dts/' "$L" || true)
+          test "$n" -eq "$want"
+          n=$(grep -cE 'patch failed|ERROR|hunks$' "$L" || true)
+          test "$n" -eq 0
+          n=$(grep -c 'append sm8250-ayaneo-pocket-micro2.dts.append' "$L" || true)
+          test "$n" -eq 1
+          { echo '### Config WARN lines'; echo '```'; grep '\] WARN CONFIG_' "$L" || true; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+      - name: Check output
+        run: |
+          o=$W/kernel-sm8250/output/current
+          test -s "$o/boot/KERNEL"
+          echo "KERNEL size: $(stat -c %s "$o/boot/KERNEL") bytes" >>"$GITHUB_STEP_SUMMARY"
+          dtc -q -I dtb -O dts "$o/dtbs/sm8250-ayaneo-pocket-micro2.dtb" >"$RUNNER_TEMP/pm2.dts"
+          grep -q 'model = "AYANEO Pocket MICRO 2";' "$RUNNER_TEMP/pm2.dts"
+          n=$(grep -cE 'opp-925000000|opp-650000000' "$RUNNER_TEMP/pm2.dts" || true)
+          test "$n" -eq 0
+          grep -q 'domain-idle-states' "$RUNNER_TEMP/pm2.dts"
+          ext=$W/kernel-sm8250/linux-7.2.6/external-firmware
+          while read -r size f; do
+            test "$(stat -c %s "$ext/$f")" -eq "$size"
+          done <<'EOF'
+          31964 qcom/a650_sqe.fw
+          41548 qcom/a650_gmu.bin
+          13964 qcom/sm8250/a650_zap.mbn
+          15515796 qcom/sm8250/adsp.mbn
+          3628672 ath11k/QCA6390/hw2.0/amss.bin
+          266684 ath11k/QCA6390/hw2.0/m3.bin
+          231980 ath11k/QCA6390/hw2.0/board-2.bin
+          210704 qca/htbtfw20.tlv
+          5857 qca/htnv20.bin
+          EOF
+          diff <(tr ' ' '\n' <"$W/kernel-sm8250/extra-firmware.list" | LC_ALL=C sort) - <<'EOF'
+          ath11k/QCA6390/hw2.0/amss.bin
+          ath11k/QCA6390/hw2.0/board-2.bin
+          ath11k/QCA6390/hw2.0/m3.bin
+          qca/htbtfw20.tlv
+          qca/htnv20.bin
+          qcom/a650_gmu.bin
+          qcom/a650_sqe.fw
+          qcom/sm8250/a650_zap.mbn
+          qcom/sm8250/adsp.mbn
+          regulatory.db
+          regulatory.db.p7s
+          EOF
+          test -f "$o/firmware/qcom/a650_sqe.fw"
+          cfg=("$o"/config-*)
+          test "${#cfg[@]}" -eq 1
+          diff <(grep -E '^CONFIG_(NTSYNC|ANDROID_BINDERFS|ANDROID_BINDER_DEVICES|HID_STEAM|FTRACE|SYSFB_SIMPLEFB|DRM_SIMPLEDRM|DRM_MSM|DRM_PANEL_AYANEO_AR18|TOUCHSCREEN_ST7123|HID_AYANEO|REGULATOR_QCOM_LCDB|BACKLIGHT_QCOM_WLED|QCOM_Q6V5_PAS|ARM_PSCI_CPUIDLE)=' "${cfg[0]}" | LC_ALL=C sort) - <<'EOF'
+          CONFIG_ANDROID_BINDERFS=y
+          CONFIG_ANDROID_BINDER_DEVICES="anbox-binder,anbox-hwbinder,anbox-vndbinder"
+          CONFIG_ARM_PSCI_CPUIDLE=y
+          CONFIG_BACKLIGHT_QCOM_WLED=y
+          CONFIG_DRM_MSM=y
+          CONFIG_DRM_PANEL_AYANEO_AR18=y
+          CONFIG_DRM_SIMPLEDRM=y
+          CONFIG_FTRACE=y
+          CONFIG_HID_AYANEO=m
+          CONFIG_HID_STEAM=m
+          CONFIG_NTSYNC=m
+          CONFIG_QCOM_Q6V5_PAS=m
+          CONFIG_REGULATOR_QCOM_LCDB=y
+          CONFIG_SYSFB_SIMPLEFB=y
+          CONFIG_TOUCHSCREEN_ST7123=m
+          EOF
+          n=$(grep -cx 'CONFIG_EXTRA_FIRMWARE=""' "${cfg[0]}" || true)
+          test "$n" -eq 1
+          n=$(grep -c '^CONFIG_DEBUG_INFO_REDUCED=y' "${cfg[0]}" || true)
+          test "$n" -eq 0
+          n=$(grep -cE '^CONFIG_(DEBUG_INFO_BTF|SCHED_CLASS_EXT)=y' "${cfg[0]}" || true)
+          test "$n" -eq 2
+      - name: Pack
+        run: |
+          out=$W/kernel-sm8250/output
+          sudo tar -C "$out" -cf "$RUNNER_TEMP/kernel-sm8250.tar" "$(readlink "$out/current")" current
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: kernel-sm8250
+          path: ${{ runner.temp }}/kernel-sm8250.tar
+          retention-days: 7
+          if-no-files-found: error
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: kernel-sm8250-log
+          path: ${{ runner.temp }}/k8250.log
+          retention-days: 7
+
+  kernel-regression:
+    needs: changes
+    if: ${{ inputs.regression || needs.changes.outputs.kernel_common == 'true' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 240
+    steps:
+      - name: Check inputs
+        run: |
+          [[ "$BASE_TAG" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "bad base_tag" >&2; exit 1; }
+          [[ "$BASE_REPO" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "bad base_repo" >&2; exit 1; }
+          [[ "$KERNEL_RUN_ID" =~ ^[0-9]*$ ]] || { echo "bad kernel_run_id" >&2; exit 1; }
+      - uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e
+        with:
+          remove-codeql: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Host tools
+        run: |
+          docker version
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends busybox-static
+          file -L /bin/busybox | grep -q 'statically linked'
+      - name: Sources
+        run: |
+          git cat-file -e "${BASE_SHA}^{commit}"
+          mkdir -p "$W"
+          git worktree add -q --detach "$W/port-base" "$BASE_SHA"
+          source external-and-mods/kernel-sm8650/soc.env
+          r=$W/rocknix-${ROCKNIX_REF}
+          git clone -q --depth 1 --branch "$ROCKNIX_REF" --filter=blob:none --sparse https://github.com/ROCKNIX/distribution "$r"
+          read -ra dirs <<<"$PATCH_DIRS"
+          git -C "$r" sparse-checkout set "${dirs[@]}" "projects/ROCKNIX/devices/${ROCKNIX_DEVICE}"
+          echo "ROCKNIX_DIR=$r" >>"$GITHUB_ENV"
+      - name: Build sm8650 at base and head
+        run: |
+          manifest() {
+            local o=$W/reg/output/current
+            echo '## config'
+            grep -v '^#' "$o"/config-*
+            echo '## dtbs'
+            (cd "$o/dtbs" && sha256sum ./*.dtb)
+            echo '## firmware'
+            (cd "$o/firmware" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum)
+            cat "$W/reg/extra-firmware.list"
+            echo '## modules'
+            (cd "$o/modules" && find . -name '*.ko*' | LC_ALL=C sort)
+            echo '## cmdline'
+            dd if="$o/boot/KERNEL" bs=1 skip=64 count=512 status=none | sha256sum
+            echo '## source'
+            (cd "$W/reg/linux-${KVER}" && find . -type f \( -name '*.[chS]' -o -name '*.dts*' -o -name 'Kconfig*' -o -name Makefile \) -not -path '*/include/generated/*' -not -name '.*' -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum)
+          }
+          source external-and-mods/kernel-sm8650/soc.env
+          for side in base head; do
+            if [ "$side" = base ]; then tree=$W/port-base; else tree=$PWD; fi
+            if [ -d "$W/reg-base/cache" ]; then sudo mkdir -p "$W/reg" && sudo cp -a "$W/reg-base/cache" "$W/reg/"; fi
+            WORK=$W/reg bash "$tree/external-and-mods/kernel-common/build-gcc15.sh" sm8650 2>&1 | tee "$RUNNER_TEMP/reg-$side.log"
+            test "${PIPESTATUS[0]}" -eq 0
+            n=$(grep -c 'skip missing patch dir' "$RUNNER_TEMP/reg-$side.log" || true)
+            test "$n" -eq 0
+            grep -m1 '^gcc ' "$RUNNER_TEMP/reg-$side.log" >"$RUNNER_TEMP/gcc-$side.txt"
+            manifest >"$RUNNER_TEMP/manifest-$side.txt"
+            sudo mv "$W/reg" "$W/reg-$side"
+          done
+          diff "$RUNNER_TEMP/gcc-base.txt" "$RUNNER_TEMP/gcc-head.txt"
+          if ! diff -u "$RUNNER_TEMP/manifest-base.txt" "$RUNNER_TEMP/manifest-head.txt" >"$RUNNER_TEMP/manifest.diff"; then
+            { echo '### sm8650 differs between base and head'; echo '```'; head -n 200 "$RUNNER_TEMP/manifest.diff"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "sm8650 identical at ${BASE_SHA} and ${GITHUB_SHA}" >>"$GITHUB_STEP_SUMMARY"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: kernel-regression-logs
+          path: |
+            ${{ runner.temp }}/reg-*.log
+            ${{ runner.temp }}/*.txt
+            ${{ runner.temp }}/manifest.diff
+          retention-days: 7
