@@ -184,6 +184,7 @@ Output: `/work/steamos-sm8650.img`.
   firmware, the `sdsp` libraries and the sensor registry from the Android
   `modem`, `dsp` and `persist` partitions to `/var/lib/steamos-arm/` and starts
   the SLPI. `steamos-arm-hexagonrpcd` serves `/dev/fastrpc-sdsp`, stopped across
-  suspend.
+  suspend. InputPlumber's `ssc` source (`0003`, PM2 binary only) reads the
+  accelerometer and gyro at 400 Hz as the Deck controller's IMU.
 - Which USB `phys_path` the internal pad uses (an external Xbox 360 pad with
   the same IDs gets merged into the same virtual Deck controller).

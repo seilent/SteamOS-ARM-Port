@@ -14,7 +14,6 @@
 - Wi-Fi stays on in standby.
 - s2idle (`konkrctl sleep s2idle`) sleeps the CPUs but not the rest of the SoC. Standby is the default.
 - USB charging negotiates 5 V only.
-- No motion sensors.
 - The LC and RC front keys do nothing.
 - The stick RGB LEDs are not driven, they keep their last state, also in sleep.
 - Headset mic untested.

@@ -4,3 +4,4 @@
 *.pkg.tar*
 libiio-src/
 extract/
+inputplumber-0.81.0-pm2*

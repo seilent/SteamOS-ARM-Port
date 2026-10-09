@@ -312,9 +312,51 @@ jobs:
             ${{ runner.temp }}/manifest.diff
           retention-days: 7
 
+  inputplumber:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            external-and-mods/InputPlumber/inputplumber-0.81.0-pm2
+            external-and-mods/InputPlumber/inputplumber-0.81.0-pm2.sha256
+          key: inputplumber-pm2-${{ hashFiles('external-and-mods/InputPlumber/**', 'scripts/build-inputplumber-konkr.sh') }}
+      - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        name: Host tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libiio-dev libudev-dev libclang-dev clang pkg-config
+          if ! command -v rustup >/dev/null; then
+            curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+            echo "$HOME/.cargo/bin" >>"$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup toolchain install 1.93.1 --profile minimal
+          ldd --version | sed -n 1p
+      - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        name: Build
+        run: INPUTPLUMBER_BUILD_SRC="$RUNNER_TEMP/ip-src" bash scripts/build-inputplumber-konkr.sh pm2
+      - name: Check binary
+        run: |
+          cd external-and-mods/InputPlumber
+          sha256sum -c inputplumber-0.81.0-pm2.sha256
+          [[ "$(file -L inputplumber-0.81.0-pm2)" == *'ARM aarch64'* ]]
+          test "$(strings inputplumber-0.81.0-pm2 | grep -c 'GLIBC_2\.4[0-9]' || true)" = 0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: inputplumber-pm2
+          path: |
+            external-and-mods/InputPlumber/inputplumber-0.81.0-pm2
+            external-and-mods/InputPlumber/inputplumber-0.81.0-pm2.sha256
+          retention-days: 7
+          if-no-files-found: error
+
   image:
-    needs: kernel
-    if: ${{ !cancelled() && (needs.kernel.result == 'success' || needs.kernel.result == 'skipped') }}
+    needs: [kernel, inputplumber]
+    if: ${{ !cancelled() && (needs.kernel.result == 'success' || needs.kernel.result == 'skipped') && needs.inputplumber.result == 'success' }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 330
     permissions:
@@ -337,6 +379,12 @@ jobs:
           fetch-depth: 0
       - name: Base commit
         run: git cat-file -e "${BASE_SHA}^{commit}"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: inputplumber-pm2
+          path: external-and-mods/InputPlumber
+      - name: InputPlumber binary
+        run: (cd external-and-mods/InputPlumber && sha256sum -c inputplumber-0.81.0-pm2.sha256)
       - name: Host tools
         env:
           GH_TOKEN: ${{ github.token }}
@@ -466,6 +514,7 @@ jobs:
           test -n "$ref"
           test "$(sudo git -c safe.directory='*' -C "$W/box64" rev-parse HEAD)" = "$ref"
           sudo ls "$R/usr/lib/binfmt.d/box64.conf" "$R/etc/binfmt.d/box64.conf"
+          sudo cmp "$R/usr/bin/inputplumber" external-and-mods/InputPlumber/inputplumber-0.81.0-pm2
           grep -qF '==> meson hexagonrpc against' "$L"
           test "$(sudo cat "$R/usr/share/steamos-arm/hexagonrpc-ref")" = "$(sed -n 's/^REF=//p' scripts/build-hexagonrpc-in-rootfs.sh)"
           sudo test -f "$R/usr/lib/libhexagonrpc.so.0.5"
@@ -532,6 +581,7 @@ jobs:
           for t in amixer aplay flock udevadm journalctl systemd-run logger timeout blkid blockdev mountpoint busctl; do
             sudo test -x "$R/usr/bin/$t" || { echo "rootfs has no $t"; exit 1; }
           done
+          sudo grep -q 'name: fastrpc-sdsp' "$R"/var/lib/overlays/etc/upper/inputplumber/devices.d/04-ayaneo-pocket-micro2.yaml
           sudo grep -q 'REDMAGIC|PocketMICRO2' "$R"/usr/lib/steamos/sm8550-audio-setup
           sudo grep -q '"REDMAGIC 6|AYANEO Pocket MICRO 2" /sys' "$R"/usr/lib/steamos/sm8550-audio-pipewire
           sudo grep -q '"KONKR Pocket FIT|AYANEO Pocket S2" /sys' "$R"/usr/lib/steamos/sm8550-audio-pipewire
