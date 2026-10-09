@@ -121,7 +121,7 @@ jobs:
           git -C "$d" checkout -q FETCH_HEAD
           test "$(git -C "$d" rev-parse HEAD)" = "$ARMADA_REF"
           n=$(sed 's/#.*//' "$d/packages/kernel/patches/series" | awk 'NF' | wc -l)
-          test "$n" -eq 186
+          test "$n" -eq 192
           echo "ARMADA_CHECKOUT=$d" >>"$GITHUB_ENV"
       - name: Build
         run: |
@@ -132,7 +132,7 @@ jobs:
         run: |
           L=$RUNNER_TEMP/k8250.log
           n=$(grep '\] patch armada/' "$L" | grep -vc 'armada/dts/' || true)
-          test "$n" -eq 186
+          test "$n" -eq 192
           want=$(find "$ARMADA_CHECKOUT/packages/kernel/dts" -maxdepth 1 -name '*.patch' | wc -l)
           n=$(grep -c '\] patch armada/dts/' "$L" || true)
           test "$n" -eq "$want"
@@ -151,6 +151,12 @@ jobs:
           n=$(grep -cE 'opp-925000000|opp-650000000' "$RUNNER_TEMP/pm2.dts" || true)
           test "$n" -eq 0
           grep -q 'domain-idle-states' "$RUNNER_TEMP/pm2.dts"
+          node() { awk -v n="$1 {" 'index($0, n) { f = 1; d = 0 } f { d += gsub(/\{/, "{"); d -= gsub(/\}/, "}"); if (d == 1) print; if (d <= 0) f = 0 }' "$RUNNER_TEMP/pm2.dts"; }
+          node displayport-controller@ae90000 | grep -qF 'status = "okay";'
+          slpi=$(node remoteproc@5c00000)
+          grep -qF 'compatible = "qcom,sm8250-slpi-pas";' <<<"$slpi"
+          grep -qF 'status = "okay";' <<<"$slpi"
+          grep -qF 'firmware-name = "qcom/sm8250/ayaneo/pocketmicro2/slpi.mdt";' <<<"$slpi"
           ext=$W/kernel-sm8250/linux-7.2.6/external-firmware
           while read -r size f; do
             test "$(stat -c %s "$ext/$f")" -eq "$size"
@@ -181,7 +187,7 @@ jobs:
           test -f "$o/firmware/qcom/a650_sqe.fw"
           cfg=("$o"/config-*)
           test "${#cfg[@]}" -eq 1
-          diff <(grep -E '^CONFIG_(NTSYNC|ANDROID_BINDERFS|ANDROID_BINDER_DEVICES|HID_STEAM|FTRACE|SYSFB_SIMPLEFB|DRM_SIMPLEDRM|DRM_MSM|DRM_PANEL_AYANEO_AR18|TOUCHSCREEN_ST7123|HID_AYANEO|REGULATOR_QCOM_LCDB|BACKLIGHT_QCOM_WLED|QCOM_Q6V5_PAS|ARM_PSCI_CPUIDLE)=' "${cfg[0]}" | LC_ALL=C sort) - <<'EOF'
+          diff <(grep -E '^CONFIG_(NTSYNC|ANDROID_BINDERFS|ANDROID_BINDER_DEVICES|HID_STEAM|FTRACE|SYSFB_SIMPLEFB|DRM_SIMPLEDRM|DRM_MSM|DRM_PANEL_AYANEO_AR18|TOUCHSCREEN_ST7123|HID_AYANEO|REGULATOR_QCOM_LCDB|BACKLIGHT_QCOM_WLED|QCOM_Q6V5_PAS|ARM_PSCI_CPUIDLE|TYPEC_DP_ALTMODE|TYPEC_MUX_GPIO_SBU|QCOM_FASTRPC|QRTR)=' "${cfg[0]}" | LC_ALL=C sort) - <<'EOF'
           CONFIG_ANDROID_BINDERFS=y
           CONFIG_ANDROID_BINDER_DEVICES="anbox-binder,anbox-hwbinder,anbox-vndbinder"
           CONFIG_ARM_PSCI_CPUIDLE=y
@@ -193,10 +199,14 @@ jobs:
           CONFIG_HID_AYANEO=m
           CONFIG_HID_STEAM=m
           CONFIG_NTSYNC=m
+          CONFIG_QCOM_FASTRPC=y
           CONFIG_QCOM_Q6V5_PAS=m
+          CONFIG_QRTR=y
           CONFIG_REGULATOR_QCOM_LCDB=y
           CONFIG_SYSFB_SIMPLEFB=y
           CONFIG_TOUCHSCREEN_ST7123=m
+          CONFIG_TYPEC_DP_ALTMODE=m
+          CONFIG_TYPEC_MUX_GPIO_SBU=m
           EOF
           n=$(grep -cx 'CONFIG_EXTRA_FIRMWARE=""' "${cfg[0]}" || true)
           test "$n" -eq 1
