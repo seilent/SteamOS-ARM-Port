@@ -769,10 +769,14 @@ if [[ "${SOC:-sm8650}" == sm8250 ]]; then
     \( -type d -exec chmod 0755 {} + \) -o \( -type f -exec chmod 0644 {} + \) 2>/dev/null
   chmod 0644 "$R/usr/lib/udev/rules.d/99-sm8250-wcd938x-nosleep.rules" \
     "$R/usr/lib/udev/rules.d/99-ayaneo-pocket-micro2-dp-audio.rules" \
+    "$R/usr/lib/udev/rules.d/70-steamos-arm-slpi-sensors.rules" \
+    "$R/usr/lib/systemd/system/steamos-arm-slpi-sensors.service" \
+    "$R/usr/lib/systemd/system/steamos-arm-hexagonrpcd.service" \
     "$R/usr/lib/systemd/user/steamos-arm-pm2-audio-state.service" \
     "$R/usr/share/wireplumber/scripts/steamos-arm/default-sink-rank.lua" \
     "$R/usr/share/wireplumber/wireplumber.conf.d/50-steamos-arm-default-sink.conf"
-  chmod 0755 "$R/usr/lib/steamos-arm/pm2-dp-audio-reprobe" "$R/usr/lib/steamos-arm/pm2-audio-state-reset"
+  chmod 0755 "$R/usr/lib/steamos-arm/pm2-dp-audio-reprobe" "$R/usr/lib/steamos-arm/pm2-audio-state-reset" \
+    "$R/usr/lib/steamos-arm/slpi-sensors" "$R/usr/lib/systemd/system-sleep/46-steamos-arm-hexagonrpcd"
   mkdir -p "$R/usr/lib/systemd/user/wireplumber.service.wants"
   ln -sfn ../steamos-arm-pm2-audio-state.service \
     "$R/usr/lib/systemd/user/wireplumber.service.wants/steamos-arm-pm2-audio-state.service"

@@ -1,0 +1,37 @@
+#!/bin/bash
+set -uo pipefail
+
+unit=steamos-arm-hexagonrpcd.service
+run_dir=/run/steamos-arm
+marker=$run_dir/hexagonrpcd-suspended
+
+inputplumber() {
+    busctl --timeout=5 call org.shadowblip.InputPlumber /org/shadowblip/InputPlumber/Manager \
+        org.shadowblip.InputManager "$1" >/dev/null ||
+        printf 'steamos-arm-hexagonrpcd-sleep: InputPlumber %s failed\n' "$1" >&2
+}
+
+case "${2:-}" in
+    suspend|suspend-then-hibernate|hybrid-sleep) ;;
+    *) exit 0 ;;
+esac
+case "${1:-}" in
+    pre)
+        case "$(systemctl is-active "$unit" 2>/dev/null)" in
+            active|activating|reloading) ;;
+            *) exit 0 ;;
+        esac
+        mkdir -p "$run_dir" && : >"$marker"
+        inputplumber HookSleep
+        systemctl stop "$unit" ||
+            printf 'steamos-arm-hexagonrpcd-sleep: stopping %s failed\n' "$unit" >&2
+        ;;
+    post)
+        [[ -e "$marker" ]] || exit 0
+        rm -f -- "$marker"
+        systemctl --no-block start "$unit" ||
+            printf 'steamos-arm-hexagonrpcd-sleep: starting %s failed\n' "$unit" >&2
+        inputplumber HookWake
+        ;;
+esac
+exit 0

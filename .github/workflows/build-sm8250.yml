@@ -424,7 +424,7 @@ jobs:
           sudo mkdir -p "$m"
           sudo mount -o ro "${dev}p2" "$m"
           grep -qx 'soc=sm8650' "$m/opt/steamos-sm8650/IMAGE.txt"
-          for t in gcc cmake ninja; do test -x "$m/usr/bin/$t" || { echo "base rootfs has no $t" >&2; exit 1; }; done
+          for t in gcc cmake ninja meson; do test -x "$m/usr/bin/$t" || { echo "base rootfs has no $t" >&2; exit 1; }; done
           compgen -G "$m/usr/lib/libgallium-*.so" >/dev/null || { echo "base rootfs has no Mesa in /usr/lib" >&2; exit 1; }
           compgen -G "$m/opt/stock-steamos/usr/lib/libgallium-*.so" >/dev/null || { echo "base rootfs has no Valve Mesa in /opt/stock-steamos" >&2; exit 1; }
           mesa=$(grep -a -o -h -m1 'Mesa [0-9][0-9.]*' "$m"/usr/lib/libgallium-*.so | head -n 1)
@@ -466,6 +466,11 @@ jobs:
           test -n "$ref"
           test "$(sudo git -c safe.directory='*' -C "$W/box64" rev-parse HEAD)" = "$ref"
           sudo ls "$R/usr/lib/binfmt.d/box64.conf" "$R/etc/binfmt.d/box64.conf"
+          grep -qF '==> meson hexagonrpc against' "$L"
+          test "$(sudo cat "$R/usr/share/steamos-arm/hexagonrpc-ref")" = "$(sed -n 's/^REF=//p' scripts/build-hexagonrpc-in-rootfs.sh)"
+          sudo test -f "$R/usr/lib/libhexagonrpc.so.0.5"
+          [[ "$(sudo file -L "$R/usr/bin/hexagonrpcd")" == *'ARM aarch64'* ]]
+          test "$(sudo readelf -d "$R/usr/bin/hexagonrpcd" | grep -cF 'Shared library: [libhexagonrpc.so.0.5]')" = 1
           test "$(sudo strings "$R/usr/bin/mangoapp" | grep -c 'GLIBC_2\.43' || true)" = 0
           sudo bash -c 'cd "$1" && sha256sum -c --quiet "$2"' _ "$R" "$RUNNER_TEMP/base-builds.sha256"
           grep -qF 'konkr-android: no payload in' "$L"
@@ -511,16 +516,20 @@ jobs:
             "$R"/var/lib/overlays/etc/upper/inputplumber/devices.d/04-ayaneo-pocket-micro2.yaml \
             "$R"/usr/lib/udev/rules.d/99-sm8250-wcd938x-nosleep.rules \
             "$R"/usr/lib/udev/rules.d/99-ayaneo-pocket-micro2-dp-audio.rules \
+            "$R"/usr/lib/udev/rules.d/70-steamos-arm-slpi-sensors.rules \
+            "$R"/usr/lib/systemd/system/steamos-arm-slpi-sensors.service \
+            "$R"/usr/lib/systemd/system/steamos-arm-hexagonrpcd.service \
             "$R"/usr/lib/systemd/user/steamos-arm-pm2-audio-state.service \
             "$R"/usr/lib/systemd/user/wireplumber.service.wants/steamos-arm-pm2-audio-state.service \
             "$R"/usr/share/wireplumber/wireplumber.conf.d/52-ayaneo-pocket-micro2.conf \
             "$R"/usr/share/wireplumber/wireplumber.conf.d/50-steamos-arm-default-sink.conf \
             "$R"/usr/share/wireplumber/scripts/steamos-arm/default-sink-rank.lua \
             "$R"/usr/share/steamos-manager/devices/ayaneo-pocket-micro2.toml
-          for f in pm2-dp-audio-reprobe pm2-audio-state-reset; do
-            sudo test -x "$R/usr/lib/steamos-arm/$f" || { echo "$f is not executable"; exit 1; }
+          for f in usr/lib/steamos-arm/pm2-dp-audio-reprobe usr/lib/steamos-arm/pm2-audio-state-reset \
+                   usr/lib/steamos-arm/slpi-sensors usr/lib/systemd/system-sleep/46-steamos-arm-hexagonrpcd; do
+            sudo test -x "$R/$f" || { echo "$f is not executable"; exit 1; }
           done
-          for t in amixer aplay flock udevadm journalctl systemd-run logger timeout; do
+          for t in amixer aplay flock udevadm journalctl systemd-run logger timeout blkid blockdev mountpoint busctl; do
             sudo test -x "$R/usr/bin/$t" || { echo "rootfs has no $t"; exit 1; }
           done
           sudo grep -q 'REDMAGIC|PocketMICRO2' "$R"/usr/lib/steamos/sm8550-audio-setup
@@ -528,7 +537,7 @@ jobs:
           sudo grep -q '"KONKR Pocket FIT|AYANEO Pocket S2" /sys' "$R"/usr/lib/steamos/sm8550-audio-pipewire
       - name: PM2 udev rules verify
         run: |
-          for f in 99-sm8250-wcd938x-nosleep.rules 99-ayaneo-pocket-micro2-dp-audio.rules; do
+          for f in 99-sm8250-wcd938x-nosleep.rules 99-ayaneo-pocket-micro2-dp-audio.rules 70-steamos-arm-slpi-sensors.rules; do
             sudo udevadm verify "$W/rootfs-sm8250/usr/lib/udev/rules.d/$f"
           done
       - name: Audio watcher exits on the PM2
@@ -559,7 +568,9 @@ jobs:
         run: |
           for f in scripts/apply-overlays.sh scripts/apply-overlays-sm8350.sh \
                    sm8650-overlay/usr/lib/steamos/sm8550-audio-setup steamos-overlay/usr/lib/steamos/sm8550-audio-pipewire \
-                   sm8250-overlay/usr/lib/steamos-arm/pm2-dp-audio-reprobe sm8250-overlay/usr/lib/steamos-arm/pm2-audio-state-reset; do
+                   sm8250-overlay/usr/lib/steamos-arm/pm2-dp-audio-reprobe sm8250-overlay/usr/lib/steamos-arm/pm2-audio-state-reset \
+                   sm8250-overlay/usr/lib/steamos-arm/slpi-sensors sm8250-overlay/usr/lib/systemd/system-sleep/46-steamos-arm-hexagonrpcd \
+                   scripts/build-hexagonrpc-in-rootfs.sh; do
             bash -n "$f"
           done
       - name: Hub catalog and Python

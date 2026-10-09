@@ -216,6 +216,19 @@ build_box64() {
   echo SD865 >"$mark"
 }
 
+build_hexagonrpc() {
+  local mark="${R}/usr/share/steamos-arm/hexagonrpc-ref" ref
+  ref="$(sed -n 's/^REF=//p' "${SCRIPTS}/build-hexagonrpc-in-rootfs.sh")"
+  if [[ -x "${R}/usr/bin/hexagonrpcd" && "$(cat "$mark" 2>/dev/null)" == "$ref" ]]; then
+    log "hexagonrpcd ${ref} already in rootfs, skip rebuild"
+    return 0
+  fi
+  log "Building hexagonrpcd inside the rootfs"
+  "${SCRIPTS}/build-hexagonrpc-in-rootfs.sh" "${R}"
+  mkdir -p "$(dirname "$mark")"
+  echo "$ref" >"$mark"
+}
+
 install_box64_rootfs() {
   [[ -x "${BOX64_BUILD}/box64" ]] || die "box64 binary missing — build first"
   log "Installing Box64 into rootfs (no menu / no updater)"
@@ -574,6 +587,9 @@ if [[ "$IMAGE_ONLY" -eq 0 ]]; then
     printf '%s\n' "${BASE_INFO}" >"${R}/opt/steamos-sm8650/RELEASE-BASE.txt"
   fi
   build_box64
+  if [[ "$SOC" == sm8250 ]]; then
+    build_hexagonrpc
+  fi
 fi
 # Always refresh runtime bits before packing
 [[ -x "${R}/usr/local/bin/box64" ]] || install_box64_rootfs

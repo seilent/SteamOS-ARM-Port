@@ -1,0 +1,12 @@
+[Unit]
+Description=steamos-arm SLPI sensor DSP setup
+ConditionFirmware=device-tree-compatible(ayaneo,pocket-micro2)
+Wants=sys-kernel-debug.mount
+After=sys-kernel-debug.mount
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/steamos-arm/slpi-sensors
+StandardOutput=journal
+StandardError=journal
