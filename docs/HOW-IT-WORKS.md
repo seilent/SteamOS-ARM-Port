@@ -174,7 +174,9 @@ Output: `/work/steamos-sm8650.img`.
   DP audio and the SLPI sensor DSP. GPU capped at the 587 MHz stock max. Mesa
   26.2.3 with GL through zink, from its v1.3.0 base image.
 - AYANEO Pocket MICRO 2 audio: the shared `sm8550-audio-pipewire` watcher skips
-  the PM2. On DP hotplug `pm2-dp-audio-reprobe` adds a DisplayPort device
+  the PM2. The default sink goes by `steamos-arm.sink-rank`:
+  Bluetooth 5, USB 4, headphones 3, DisplayPort 2, speaker 1. A sink the user
+  picked wins while it is present. On DP hotplug `pm2-dp-audio-reprobe` adds a DisplayPort device
   to the HiFi UCM once the DP PCM plays and drops it on unplug.
   `steamos-arm-pm2-audio-state` clears the speaker default and profile the
   watcher stored, once per user.

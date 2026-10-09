@@ -514,6 +514,8 @@ jobs:
             "$R"/usr/lib/systemd/user/steamos-arm-pm2-audio-state.service \
             "$R"/usr/lib/systemd/user/wireplumber.service.wants/steamos-arm-pm2-audio-state.service \
             "$R"/usr/share/wireplumber/wireplumber.conf.d/52-ayaneo-pocket-micro2.conf \
+            "$R"/usr/share/wireplumber/wireplumber.conf.d/50-steamos-arm-default-sink.conf \
+            "$R"/usr/share/wireplumber/scripts/steamos-arm/default-sink-rank.lua \
             "$R"/usr/share/steamos-manager/devices/ayaneo-pocket-micro2.toml
           for f in pm2-dp-audio-reprobe pm2-audio-state-reset; do
             sudo test -x "$R/usr/lib/steamos-arm/$f" || { echo "$f is not executable"; exit 1; }

@@ -769,7 +769,9 @@ if [[ "${SOC:-sm8650}" == sm8250 ]]; then
     \( -type d -exec chmod 0755 {} + \) -o \( -type f -exec chmod 0644 {} + \) 2>/dev/null
   chmod 0644 "$R/usr/lib/udev/rules.d/99-sm8250-wcd938x-nosleep.rules" \
     "$R/usr/lib/udev/rules.d/99-ayaneo-pocket-micro2-dp-audio.rules" \
-    "$R/usr/lib/systemd/user/steamos-arm-pm2-audio-state.service"
+    "$R/usr/lib/systemd/user/steamos-arm-pm2-audio-state.service" \
+    "$R/usr/share/wireplumber/scripts/steamos-arm/default-sink-rank.lua" \
+    "$R/usr/share/wireplumber/wireplumber.conf.d/50-steamos-arm-default-sink.conf"
   chmod 0755 "$R/usr/lib/steamos-arm/pm2-dp-audio-reprobe" "$R/usr/lib/steamos-arm/pm2-audio-state-reset"
   mkdir -p "$R/usr/lib/systemd/user/wireplumber.service.wants"
   ln -sfn ../steamos-arm-pm2-audio-state.service \
