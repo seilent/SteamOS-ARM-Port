@@ -1,0 +1,10 @@
+#!/bin/bash
+set -u
+grep -qa 'AYANEO Pocket MICRO 2' /sys/firmware/devicetree/base/model 2>/dev/null || exit 0
+state="${XDG_STATE_HOME:-$HOME/.local/state}"
+mark="$state/steamos-arm/pm2-audio-state-reset"
+[[ -e "$mark" ]] && exit 0
+wp="$state/wireplumber"
+[[ -f "$wp/default-nodes" ]] && sed -i -E '/^default\.configured\.audio\.sink(\.[0-9]+)?=alsa_output\.platform-sound\./d' "$wp/default-nodes"
+[[ -f "$wp/default-profile" ]] && sed -i '/^alsa_card\.platform-sound=/d' "$wp/default-profile"
+mkdir -p "${mark%/*}" && : >"$mark"

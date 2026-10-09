@@ -173,5 +173,10 @@ Output: `/work/steamos-sm8650.img`.
   `steamos-port-pm2` branch of seilent/armada: sleep fixes, USB-C DP alt mode,
   DP audio and the SLPI sensor DSP. GPU capped at the 587 MHz stock max. Mesa
   26.2.3 with GL through zink, from its v1.3.0 base image.
+- AYANEO Pocket MICRO 2 audio: the shared `sm8550-audio-pipewire` watcher skips
+  the PM2. On DP hotplug `pm2-dp-audio-reprobe` adds a DisplayPort device
+  to the HiFi UCM once the DP PCM plays and drops it on unplug.
+  `steamos-arm-pm2-audio-state` clears the speaker default and profile the
+  watcher stored, once per user.
 - Which USB `phys_path` the internal pad uses (an external Xbox 360 pad with
   the same IDs gets merged into the same virtual Deck controller).

@@ -1,0 +1,8 @@
+[Unit]
+ConditionUser=!root
+Description=Drop the PM2 speaker default left by the shared audio watcher
+Before=wireplumber.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/steamos-arm/pm2-audio-state-reset

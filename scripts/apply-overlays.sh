@@ -767,7 +767,13 @@ if [[ "${SOC:-sm8650}" == sm8250 ]]; then
   find "$R/usr/share/alsa/ucm2/AYANEO/PocketMICRO2" "$R/usr/share/alsa/ucm2/conf.d/sm8250" "$R/usr/share/alsa/ucm2/codecs/wsa881x" \
     "$R/etc/inputplumber" "$R/var/lib/overlays/etc/upper/inputplumber" \
     \( -type d -exec chmod 0755 {} + \) -o \( -type f -exec chmod 0644 {} + \) 2>/dev/null
-  chmod 0644 "$R/usr/lib/udev/rules.d/99-sm8250-wcd938x-nosleep.rules"
+  chmod 0644 "$R/usr/lib/udev/rules.d/99-sm8250-wcd938x-nosleep.rules" \
+    "$R/usr/lib/udev/rules.d/99-ayaneo-pocket-micro2-dp-audio.rules" \
+    "$R/usr/lib/systemd/user/steamos-arm-pm2-audio-state.service"
+  chmod 0755 "$R/usr/lib/steamos-arm/pm2-dp-audio-reprobe" "$R/usr/lib/steamos-arm/pm2-audio-state-reset"
+  mkdir -p "$R/usr/lib/systemd/user/wireplumber.service.wants"
+  ln -sfn ../steamos-arm-pm2-audio-state.service \
+    "$R/usr/lib/systemd/user/wireplumber.service.wants/steamos-arm-pm2-audio-state.service"
 fi
 # 8 Gen 2 image: Wi-Fi firmware from upstream linux-firmware (pinned tag and
 # hashes). The Frame's WCN7850 board file only has the Frame's own 2 boards,

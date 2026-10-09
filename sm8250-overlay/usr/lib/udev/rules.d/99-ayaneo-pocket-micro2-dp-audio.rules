@@ -1,0 +1,1 @@
+ACTION=="change", SUBSYSTEM=="drm", ENV{HOTPLUG}=="1", RUN+="/usr/bin/systemd-run --no-block --collect --on-active=3 /usr/lib/steamos-arm/pm2-dp-audio-reprobe"

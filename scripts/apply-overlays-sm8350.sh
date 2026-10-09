@@ -109,7 +109,7 @@ if "REDMAGIC 6" not in s and old in s:
 open(svc, "w").write(s)
 PY
 
-sed -i 's/|AYANEO Pocket MICRO 2" \/sys/|AYANEO Pocket MICRO 2|REDMAGIC 6" \/sys/' \
+sed -i 's/|AYANEO Pocket S2" \/sys/|AYANEO Pocket S2|REDMAGIC 6" \/sys/' \
   "$R/usr/lib/steamos/sm8550-audio-pipewire"
 
 # The REDMAGIC card ("sm8250 - REDMAGIC 6") is set up by its UCM when
